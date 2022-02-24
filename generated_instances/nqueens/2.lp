@@ -1,0 +1,11 @@
+%formhe-groundtruth:../../examples/nqueens.lp
+#program base.
+#const n = 8.
+row((1..n)).
+col((1..n)).
+n <= { queen(I,J): row(I), col(J) } <= n.
+% selected out statement:
+%#false :- queen(I1,J1); queen(I2,J2); (I1,J1) != (I2,J2); (I1+J1) = (I2+J2).
+#false :- queen(I,J1); queen(I,J2); J1 != J2.
+#false :- queen(I1,J); queen(I2,J); I1 != I2.
+#false :- queen(I1,J1); queen(I2,J2); (I1,J1) != (I2,J2); (I1-J1) = (I2-J2).
