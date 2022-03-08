@@ -7,6 +7,7 @@ import pycvc5
 from clingo.symbol import Symbol, SymbolType
 from pycvc5 import Kind
 
+from asp.instance import Instance
 from sygus.sygus import SyGuSProblem
 
 
@@ -48,7 +49,8 @@ def unsat_core_by_fun(unsat_core: Iterable[Symbol]) -> Dict[str, List[Symbol]]:
 
 class SyGuSVisitor:
 
-    def __init__(self, unsat_cores: Collection[Collection[Symbol]], valid_models, relax_pbe_constraints=False, constrain_reflexive=False):
+    def __init__(self, instance: Instance, unsat_cores: Collection[Collection[Symbol]], valid_models, relax_pbe_constraints=False, constrain_reflexive=False, skip_cores=0):
+        self.instance = instance
         self.unsat_cores = unsat_cores
         self.models = valid_models
         self.relax_pbe_constraints = relax_pbe_constraints
@@ -64,20 +66,26 @@ class SyGuSVisitor:
         Int = self.solver.getIntegerSort()
         Bool = self.solver.getBooleanSort()
 
-        min_core = sorted(unsat_cores, key=len)[0]
+        min_core = sorted(unsat_cores, key=len)[skip_cores:][0]
 
         vars_by_sym = defaultdict(lambda: defaultdict(list))
         self.num_by_sym = defaultdict(lambda: 0)
 
         self.sygus = SyGuSProblem('f')
+        print(self.sygus.make_enum(self.solver, self.instance.constants))
+
         for sym_i, sym in enumerate(min_core):
             self.num_by_sym[sym.name] += 1
 
             if sym.type == SymbolType.Function:
                 for arg_i, arg in enumerate(sym.arguments):
                     if arg.type == SymbolType.Number:
-                        self.sygus.add_input(self.solver.mkVar(Int, f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
+                        self.sygus.add_input(Int, self.solver.mkVar(Int, f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
                         vars_by_sym[sym.name][sym_i].append(self.sygus.inputs[-1])
+                    elif arg.type == SymbolType.Function and len(arg.arguments) == 0:
+                        self.sygus.add_input(self.sygus.constantSort, self.solver.mkVar(self.sygus.constantSort, f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
+                        vars_by_sym[sym.name][sym_i].append(self.sygus.inputs[-1])
+                        pass
                     else:
                         raise NotImplementedError()
             else:
@@ -86,20 +94,27 @@ class SyGuSVisitor:
         S = self.solver.mkVar(Bool, 'S')
         B = self.solver.mkVar(Bool, 'B')
         I = self.solver.mkVar(Int, 'I')
+        C = self.solver.mkVar(self.sygus.constantSort, 'C')
+
+        sortMapper = {Int: I, Bool: B, self.sygus.constantSort: C}
 
         self.sygus.set_grammar_rules({
             S: {B,
                 (Kind.Or, B, S)},
             B: {(Kind.Not, B),
                 (Kind.And, B, B),
-                (Kind.Equal, I, I)},
+                (Kind.Equal, I, I), (Kind.Lt, I, I), (Kind.Gt, I, I),
+                (Kind.Equal, C, C)},
             I: {(Kind.Plus, I, I),
                 (Kind.Minus, I, I),
-                (Kind.Abs, I)}
+                (Kind.Abs, I),
+                0, 1, 2},
+            C: [(Kind.ApplyConstructor, self.sygus.constantSort.getDatatype().getConstructorTerm(const)) for const in self.sygus.constructors.keys()]
         }, self.solver)
 
-        for var in self.sygus.inputs:
-            self.sygus.add_grammar_rule(I, var)
+        for sort, vars in self.sygus.inputs_by_sort.items():
+            for var in vars:
+                self.sygus.add_grammar_rule(sortMapper[sort], var)
 
         self.sygus.set_starting_symbol(S)
 
@@ -116,9 +131,10 @@ class SyGuSVisitor:
                 term2 = self.solver.mkTerm(Kind.ApplyUf, self.f, *args2)
                 self.sygus.add_constraint(self.solver.mkTerm(Kind.Equal, term1, term2))
 
-    def solve(self, max_cores, max_models):
+    def solve(self, max_cores, max_models, skip_cores=0):
+        print(self.sygus)
         print('Using the following UNSAT cores as positive examples:')
-        for unsat_core in sorted(self.unsat_cores, key=len)[:max_cores]:
+        for unsat_core in sorted(self.unsat_cores, key=len)[skip_cores:max_cores]:
             print(list(map(str, unsat_core)))
 
             constraints = []
@@ -129,6 +145,7 @@ class SyGuSVisitor:
 
             if len(constraints) > 1:
                 mk_term = self.solver.mkTerm(Kind.Or, *constraints)
+                print(mk_term)
                 self.sygus.add_constraint(mk_term)
             else:
                 self.sygus.add_constraint(constraints[0])
@@ -140,6 +157,7 @@ class SyGuSVisitor:
 
                 for combo in self.get_combos(model):
                     args = self.combo_to_args(combo)
+                    print(args)
                     constraint = self.solver.mkTerm(Kind.Not, self.solver.mkTerm(Kind.ApplyUf, self.f, *args))
                     self.sygus.add_constraint(constraint)
 
@@ -165,7 +183,13 @@ class SyGuSVisitor:
         args = []
         for sym in combo:
             for arg in sym.arguments:
-                args.append(self.solver.mkInteger(arg.number))
+                if arg.type == SymbolType.Number:
+                    args.append(self.solver.mkInteger(arg.number))
+                elif arg.type == SymbolType.Function and len(arg.arguments) == 0:
+                    args.append(self.solver.mkTerm(Kind.ApplyConstructor, self.sygus.constantSort.getDatatype().getConstructorTerm(arg.name)))
+                else:
+                    raise NotImplementedError()
+
         return args
 
     def get_combos(self, unsat_core):

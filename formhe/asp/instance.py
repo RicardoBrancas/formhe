@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import IO
 
 import clingo.ast
+from ordered_set import OrderedSet
 from tqdm import tqdm
 from clingo import Control
 
@@ -21,8 +22,15 @@ class Instance:
         self.facts = []
         self.rules = []
         self.integrity_constraints = []
+        self.constantCollector = utils.ConstantCollector()
+        self.instrumenter = utils.Instrumenter()
+        self.ast = []
+        self.instrumented_ast = []
 
         def ast_callback(ast):
+            self.ast.append(ast)
+            self.instrumented_ast.append(self.instrumenter.visit(ast))
+            self.constantCollector.visit(ast)
             if utils.is_fact(ast):
                 self.facts.append(ast)
             elif utils.is_rule(ast):
@@ -42,8 +50,10 @@ class Instance:
         except:
             self.has_gt = False
 
-        self.cores = set()
-        self.answer_sets = set()
+        self.constants = self.constantCollector.constants.items
+        self.cores = OrderedSet()
+        self.gt_cores = OrderedSet()
+        self.answer_sets = OrderedSet()
 
     def get_control(self, max_sols=0):
         ctl = Control([f'{max_sols}'])
@@ -79,7 +89,35 @@ class Instance:
                     if sym.literal in cores[-1]:
                         core.append(sym.symbol)
 
-                self.cores.add(tuple(core))
+                self.cores.add(tuple(sorted(core)))
+
+        t.close()
+
+        ctl = self.ground_truth.get_control(max_sols=max_sols)
+
+        t = tqdm(total=max_sols, desc='Computing gt models')
+
+        with ctl.solve(yield_=True) as handle:
+            for m in handle:
+                t.update()
+
+                symbols = list(m.symbols(atoms=True))
+
+                gt_ctl = self.get_control(1)
+
+                cores = []
+                gt_ctl.solve([(symbol, True) for symbol in symbols], on_core=lambda c: cores.append(c), on_model=lambda m: self.answer_sets.add(m.symbols(atoms=True)))
+
+                core = []
+
+                if len(cores) == 0:
+                    continue
+
+                for sym in gt_ctl.symbolic_atoms:
+                    if sym.literal in cores[-1]:
+                        core.append(sym.symbol)
+
+                self.gt_cores.add(tuple(sorted(core)))
 
         t.close()
 
@@ -105,4 +143,8 @@ class Instance:
 
     def print_cores(self):
         for c in sorted(self.cores, key=len):
+            print(c)
+
+    def print_gt_cores(self):
+        for c in sorted(self.gt_cores, key=len):
             print(c)
