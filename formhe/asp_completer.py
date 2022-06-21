@@ -2,20 +2,20 @@
 
 import argparse
 
-from asp.instance import Instance
-from sygus.sygus_visitor import SyGuSVisitor
+from formhe.asp.instance import Instance
+from formhe.sygus.sygus_visitor import SyGuSVisitor
 
 
-def main():
+def mk_argument_parser():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('INPUT')
+    parser.add_argument('INPUT', help='A ``.lp`` file containing an incomplete ASP program.')
 
-    parser.add_argument('--model-attempts', default=500, type=int)
-    parser.add_argument('--gt-model-attempts', default=2, type=int)
+    parser.add_argument('--model-attempts', default=2000, type=int, help='Number of models generated from the incomplete program')
+    parser.add_argument('--gt-model-attempts', default=2, type=int, help='Number of models generated from the complete program')
 
-    parser.add_argument('--max-cores', default=10, type=int)
-    parser.add_argument('--max-models', default=2, type=int)
+    parser.add_argument('--max-cores', default=10, type=int, help='Maximum number of UNSAT cores used in the SyGuS sprecification')
+    parser.add_argument('--max-models', default=2, type=int, help='Maximum number of correct models used in the SyGuS sprecification')
 
     parser.add_argument('--constrain-reflexive', action='store_true')
     parser.add_argument('--relax-pbe-constraints', action='store_true')
@@ -23,6 +23,12 @@ def main():
     debug_group = parser.add_argument_group(title='Debug Options')
 
     debug_group.add_argument('--skip-cores', default=0, type=int)
+
+    return parser
+
+
+def main():
+    parser = mk_argument_parser()
 
     args = parser.parse_args()
 

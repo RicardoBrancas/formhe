@@ -33,5 +33,4 @@ class Instrumenter(clingo.ast.Transformer):
         pass
 
     def visit_Rule(self, rule):
-        print(rule)
         return rule

@@ -1,15 +1,13 @@
 import re
 from pathlib import Path
-from typing import IO
 
 import clingo.ast
+from clingo import Control
 from ordered_set import OrderedSet
 from tqdm import tqdm
-from clingo import Control
 
-from asp import utils
-from exceptions.parser_exceptions import InstanceParseException
-from exceptions.solver_exceptions import NoGroundTruthException
+from formhe.asp import utils
+from formhe.exceptions.solver_exceptions import NoGroundTruthException
 
 
 class Instance:

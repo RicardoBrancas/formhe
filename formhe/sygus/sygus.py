@@ -1,17 +1,17 @@
 from collections import defaultdict
 from typing import Dict, Set, List, Union, Tuple, Collection
 
-import pycvc5
+import cvc5
 from ordered_set import OrderedSet
 
-Grammar = Dict[pycvc5.Term, OrderedSet[pycvc5.Term]]
+Grammar = Dict[cvc5.Term, OrderedSet[cvc5.Term]]
 
 
 class SyGuSProblem:
     grammar: Grammar
-    constraints: List[pycvc5.Term]
-    starting_symbol = Union[None, pycvc5.Term]
-    inputs: List[pycvc5.Term]
+    constraints: List[cvc5.Term]
+    starting_symbol = Union[None, cvc5.Term]
+    inputs: List[cvc5.Term]
 
     def __init__(self, fun_name: str, debug: bool = False):
         self.fun_name = fun_name
@@ -24,10 +24,10 @@ class SyGuSProblem:
         self.debug = debug
         self.constantSort = None
 
-    def add_grammar_rule(self, var: pycvc5.Term, term: pycvc5.Term):
+    def add_grammar_rule(self, var: cvc5.Term, term: cvc5.Term):
         self.grammar[var].add(term)
 
-    def set_grammar_rules(self, rules: Dict[pycvc5.Term, Set[Union[Tuple, pycvc5.Term]]], solver: Union[None, pycvc5.Solver] = None):
+    def set_grammar_rules(self, rules: Dict[cvc5.Term, Set[Union[Tuple, cvc5.Term]]], solver: Union[None, cvc5.Solver] = None):
         for var, terms in rules.items():
             for term in terms:
                 if isinstance(term, tuple) or isinstance(term, list):
@@ -37,49 +37,48 @@ class SyGuSProblem:
 
                 self.add_grammar_rule(var, term)
 
-    def add_constraint(self, constraint: pycvc5.Term):
+    def add_constraint(self, constraint: cvc5.Term):
         self.constraints.append(constraint)
 
-    def realize_constraints(self, solver: pycvc5.Solver):
+    def realize_constraints(self, solver: cvc5.Solver):
         for constraint in self.constraints:
             solver.addSygusConstraint(constraint)
 
-    def set_starting_symbol(self, var: pycvc5.Term):
+    def set_starting_symbol(self, var: cvc5.Term):
         self.starting_symbol = var
 
-    def add_input(self, sort: pycvc5.Sort, var: pycvc5.Term):
+    def add_input(self, sort: cvc5.Sort, var: cvc5.Term):
         self.inputs.append(var)
         self.inputs_by_sort[sort].append(var)
 
-    def get_synth_fun(self, solver: pycvc5.Solver):
+    def get_synth_fun(self, solver: cvc5.Solver):
         self.function = solver.synthFun(self.fun_name, self.inputs, self.starting_symbol.getSort(), self.get_grammar(solver))
         return self.function
 
     def get_grammar(self, solver):
-        g = solver.mkSygusGrammar(self.inputs, self.grammar.keys())
+        g = solver.mkGrammar(self.inputs, self.grammar.keys())
 
         for lhs, rhs in self.grammar.items():
-            print(lhs, rhs)
             g.addRules(lhs, rhs)
 
         return g
 
-    def make_enum(self, solver: pycvc5.Solver, values: Collection[str], name='constant'):
+    def make_enum(self, solver: cvc5.Solver, values: Collection[str], name='constant'):
         self.constructors = {}
         for value in values:
             constructor = solver.mkDatatypeConstructorDecl(value)
             self.constructors[value] = constructor
-        self.constantSort = solver.declareDatatype(name, list(self.constructors.values()))
+        self.constantSort = solver.declareDatatype(name, *self.constructors.values())
         return self.constantSort
 
-    def enumerate(self, solver: pycvc5.Solver, max_sols=None):
+    def enumerate(self, solver: cvc5.Solver, max_sols=None):
         sols_enumerated = 0
-        if max_sols == sols_enumerated or not solver.checkSynth().isUnsat():
+        if max_sols == sols_enumerated or solver.checkSynth().hasNoSolution():
             raise StopIteration()
         else:
             sols_enumerated += 1
             yield solver.getSynthSolutions([self.function])[0][1]
-        while (max_sols is None or sols_enumerated < max_sols) and solver.checkSynthNext().isUnsat():
+        while (max_sols is None or sols_enumerated < max_sols) and solver.checkSynthNext().hasSolution():
             sols_enumerated += 1
             yield solver.getSynthSolutions([self.function])[0][1]
 

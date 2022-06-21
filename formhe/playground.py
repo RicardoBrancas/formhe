@@ -1,7 +1,7 @@
 import clingo.ast
 
-from asp.instance import Instance
-from asp.utils import is_fact, is_rule, is_integrity_constraint
+from formhe.asp.instance import Instance
+from formhe.asp.utils import is_fact, is_rule, is_integrity_constraint
 
 
 def ast_callback(ast: clingo.ast.AST):
