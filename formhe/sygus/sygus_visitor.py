@@ -74,7 +74,7 @@ class SyGuSVisitor:
 
         self.sygus = SyGuSProblem('f')
         if self.instance.constants:
-            self.sygus.make_enum(self.solver, self.instance.constants + 'empty')
+            self.sygus.make_enum(self.solver, self.instance.constants + ['empty'])
         else:
             self.sygus.make_enum(self.solver, ['empty'])
 

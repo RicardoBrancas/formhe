@@ -1,24 +1,29 @@
-import clingo.ast
+from contextlib import contextmanager, ExitStack, redirect_stdout, redirect_stderr
+
+import os
 
 from formhe.asp.instance import Instance
-from formhe.asp.utils import is_fact, is_rule, is_integrity_constraint
 
 
-def ast_callback(ast: clingo.ast.AST):
-    print(ast)
-    print('Is fact?', is_fact(ast))
-    print('Is rule?', is_rule(ast))
-    print('Is integrity constraint?', is_integrity_constraint(ast))
-    print()
+@contextmanager
+def suppress(out=True, err=False):
+    with ExitStack() as stack:
+        with open(os.devnull, "w") as null:
+            if out:
+                stack.enter_context(redirect_stdout(null))
+            if err:
+                stack.enter_context(redirect_stderr(null))
+            yield
 
 
 instance = Instance('buggy_instances/nqueens/0.lp')
 
 instance.find_wrong_models(1000)
 
-print("Cores")
-instance.print_cores()
-print("GT Cores")
-instance.print_gt_cores()
-# instance.print_answer_sets()
+print(unsats)
 
+#
+
+#
+# for f in instance.instrumenter.assumption_combos():
+#     print(f)
