@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="f11ad21d-07af-4ac4-b4b5-5490aae02211" name="aquila" url="https://sat.inesc-id.pt/~rmbb/">
+        <fileTransfer rootFolder="/home/rmbb/public_html" accessType="SFTP" host="aquila.inesc-id.pt" port="22" sshConfigId="f2ab7100-6946-4416-8e32-d9f61404ac83" sshConfig="rmbb@aquila.inesc-id.pt:22 key" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

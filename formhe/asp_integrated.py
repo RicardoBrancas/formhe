@@ -20,6 +20,10 @@ def mk_argument_parser():
     parser.add_argument('--constrain-reflexive', action='store_true')
     parser.add_argument('--relax-pbe-constraints', action='store_true')
 
+    parser.add_argument('--find-minimum', action='store_true', help='Find a minimum MCS instead of a minimal one.')
+
+    parser.add_argument("--query", action="extend", nargs="+", type=str, help='A set of atoms which should appear in some model but do not')
+
     debug_group = parser.add_argument_group(title='Debug Options')
 
     debug_group.add_argument('--skip-cores', default=0, type=int)
@@ -33,6 +37,26 @@ def main():
     args = parser.parse_args()
 
     instance = Instance(args.INPUT)
+
+    print('Instrumented program:\n')
+
+    for node in instance.instrumented_ast:
+        print(node)
+
+    print()
+
+    if not args.query and instance.mcs_query:
+        print('Reading query from instance file...')
+        print(instance.mcs_query)
+        query = instance.mcs_query
+    else:
+        query = ' '.join(args.query)
+
+    unsats = instance.find_mcs(query, args.find_minimum)
+
+    print(unsats)
+
+    instance = Instance(args.INPUT, skips=unsats)
 
     instance.find_wrong_models(max_sols=args.model_attempts)
     instance.generate_correct_models(max_sols=args.gt_model_attempts)

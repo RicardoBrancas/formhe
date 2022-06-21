@@ -1,7 +1,7 @@
 import glob
 from pathlib import Path
 
-from asp.instance import Instance
+from formhe.asp.instance import Instance
 
 for file in glob.glob('examples/*.lp'):
     example_name = Path(file).stem

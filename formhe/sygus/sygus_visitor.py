@@ -7,8 +7,8 @@ import pycvc5
 from clingo.symbol import Symbol, SymbolType
 from pycvc5 import Kind
 
-from asp.instance import Instance
-from sygus.sygus import SyGuSProblem
+from formhe.asp.instance import Instance
+from formhe.sygus.sygus import SyGuSProblem
 
 
 # def define_fun_to_string(f, params, body):
@@ -72,7 +72,10 @@ class SyGuSVisitor:
         self.num_by_sym = defaultdict(lambda: 0)
 
         self.sygus = SyGuSProblem('f')
-        print(self.sygus.make_enum(self.solver, self.instance.constants))
+        if self.instance.constants:
+            self.sygus.make_enum(self.solver, self.instance.constants + ['empty'])
+        else:
+            self.sygus.make_enum(self.solver, ['empty'])
 
         for sym_i, sym in enumerate(min_core):
             self.num_by_sym[sym.name] += 1
@@ -132,7 +135,7 @@ class SyGuSVisitor:
                 self.sygus.add_constraint(self.solver.mkTerm(Kind.Equal, term1, term2))
 
     def solve(self, max_cores, max_models, skip_cores=0):
-        print(self.sygus)
+        # print(self.sygus)
         print('Using the following UNSAT cores as positive examples:')
         for unsat_core in sorted(self.unsat_cores, key=len)[skip_cores:max_cores]:
             print(list(map(str, unsat_core)))
@@ -145,11 +148,12 @@ class SyGuSVisitor:
 
             if len(constraints) > 1:
                 mk_term = self.solver.mkTerm(Kind.Or, *constraints)
-                print(mk_term)
+                # print(mk_term)
                 self.sygus.add_constraint(mk_term)
             else:
                 self.sygus.add_constraint(constraints[0])
 
+        print()
         if len(self.models) >= 1:
             print('Using the following valid models as negative examples:')
             for model in sorted(self.models, key=len)[:max_models]:
@@ -157,7 +161,7 @@ class SyGuSVisitor:
 
                 for combo in self.get_combos(model):
                     args = self.combo_to_args(combo)
-                    print(args)
+                    # print(args)
                     constraint = self.solver.mkTerm(Kind.Not, self.solver.mkTerm(Kind.ApplyUf, self.f, *args))
                     self.sygus.add_constraint(constraint)
 
@@ -170,9 +174,13 @@ class SyGuSVisitor:
 
             self.sygus.add_constraint(constraint)
 
+        print()
+        print('SyGuS Spec:')
+        print(self.sygus)
+
         self.sygus.realize_constraints(self.solver)
 
-        print(self.sygus)
+        # print(self.sygus)
 
         print('\nSolutions:\n')
 

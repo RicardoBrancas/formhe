@@ -1,3 +1,5 @@
+import itertools
+
 import clingo
 import clingo.ast
 from ordered_set import OrderedSet
@@ -30,8 +32,48 @@ class ConstantCollector(clingo.ast.Transformer):
 class Instrumenter(clingo.ast.Transformer):
 
     def __init__(self):
-        pass
+        self.counter = 0
+        self.rule_counter = 0
+        self.instrumenter_vars = []
+        self.instrumenter_var_map = {}
+        self.disabled = False
+
+    def visit_statement(self, stmt):
+        print(stmt)
 
     def visit_Rule(self, rule):
-        print(rule)
-        return rule
+        self.rule_counter += 1
+        try:
+            if rule.head.atom.symbol.name == "formhe_definition_begin":
+                self.disabled = True
+                return rule
+        except:
+            pass
+        try:
+            if rule.head.atom.symbol.name == "formhe_definition_end":
+                self.disabled = False
+                return rule
+        except:
+            pass
+
+        if not self.disabled:
+            instrumenter_var = clingo.ast.Variable(rule.location, f"instrumenter_{self.counter}")
+            self.instrumenter_vars.append(clingo.Function(f"instrumenter_{self.counter}"))
+            self.instrumenter_var_map[clingo.Function(f"instrumenter_{self.counter}")] = self.rule_counter - 1
+            self.counter += 1
+            rule.body.append(instrumenter_var)
+            return rule
+        else:
+            return rule
+
+    def assumption_combos(self):
+        for combo in itertools.product([True, False], repeat=len(self.instrumenter_vars)):
+            str = ''
+            disabled = []
+            for i, (var, val) in enumerate(zip(self.instrumenter_vars, combo)):
+                if val:
+                    str += f'{var}. '
+                else:
+                    str += f'not {var}. '
+                    disabled.append(i)
+            yield str, disabled

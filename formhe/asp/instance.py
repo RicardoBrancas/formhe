@@ -1,22 +1,26 @@
 import re
 from pathlib import Path
-from typing import IO
 
 import clingo.ast
+from clingo import Control
 from ordered_set import OrderedSet
 from tqdm import tqdm
-from clingo import Control
 
-from asp import utils
-from exceptions.parser_exceptions import InstanceParseException
-from exceptions.solver_exceptions import NoGroundTruthException
+from formhe.asp import utils
+from formhe.exceptions.solver_exceptions import NoGroundTruthException
 
 
 class Instance:
 
-    def __init__(self, filename: str):
-        with open(filename) as f:
-            self.contents = f.read()
+    def __init__(self, filename: str = None, ast: clingo.ast.AST = None, skips: list[int] = None):
+        if (filename is not None and ast is not None) or (filename is None and ast is None):
+            raise ValueError("Need to supply exactly one of {filename, ast}.")
+
+        if filename is not None:
+            with open(filename) as f:
+                self.contents = f.read()
+        elif ast is not None:
+            self.contents = '\n'.join(map(str, ast))
 
         self.others = []
         self.facts = []
@@ -29,7 +33,6 @@ class Instance:
 
         def ast_callback(ast):
             self.ast.append(ast)
-            self.instrumented_ast.append(self.instrumenter.visit(ast))
             self.constantCollector.visit(ast)
             if utils.is_fact(ast):
                 self.facts.append(ast)
@@ -40,7 +43,15 @@ class Instance:
             else:
                 self.others.append(ast)
 
+        def ast_instrumenter(ast):
+            self.instrumented_ast.append(self.instrumenter.visit(ast))
+
         clingo.ast.parse_string(self.contents, ast_callback)
+        clingo.ast.parse_string(self.contents, ast_instrumenter)
+
+        if skips:
+            self.ast = [ast for i, ast in enumerate(self.ast) if i not in skips]
+            self.instrumented_ast = [ast for i, ast in enumerate(self.instrumented_ast) if i not in skips]
 
         try:
             self.ground_truth_file = Path(filename).resolve().parent / re.search('%formhe-groundtruth:(.*)', self.contents)[1]
@@ -50,14 +61,29 @@ class Instance:
         except:
             self.has_gt = False
 
+        try:
+            self.mcs_query = re.search('%formhe-mcs-query:(.*)', self.contents)[1]
+        except:
+            pass
+
         self.constants = self.constantCollector.constants.items
         self.cores = OrderedSet()
         self.gt_cores = OrderedSet()
         self.answer_sets = OrderedSet()
 
-    def get_control(self, max_sols=0):
+    def get_control(self, max_sols=0, *args):
         ctl = Control([f'{max_sols}'])
         ctl.add('base', [], self.contents)
+        for arg in args:
+            ctl.add('base', [], arg)
+        ctl.ground([('base', [])])
+        return ctl
+
+    def get_instrumented_control(self, max_sols=0, *args):
+        ctl = Control([f'{max_sols}'])
+        ctl.add('base', [], '\n'.join(map(str, self.instrumented_ast)))
+        for arg in args:
+            ctl.add('base', [], arg)
         ctl.ground([('base', [])])
         return ctl
 
@@ -136,6 +162,55 @@ class Instance:
         ctl.solve(on_model=model_callback)
 
         t.close()
+
+    def find_mcs(self, query, minimum=False):
+        instrumenter_vars = self.instrumenter.instrumenter_vars
+        n_vars = len(instrumenter_vars)
+
+        generate_vars = '0 { ' + '; '.join(map(str, instrumenter_vars)) + ' } ' + str(n_vars) + '.'
+
+        print()
+        print(generate_vars)
+        print()
+
+        clause_s_set = OrderedSet()
+        clause_s = ''
+        clause_d = ''
+        clause_r = ''
+
+        while True:
+            if not minimum:
+                ctl = self.get_instrumented_control(1, generate_vars, clause_s, clause_d, query)
+            else:
+                ctl = self.get_instrumented_control(1, generate_vars, clause_r, query)
+
+            unsat = True
+
+            with ctl.solve(yield_=True) as handle:
+                for m in handle:
+                    unsat = False
+                    unsatisfied = []
+
+                    for var in instrumenter_vars:
+                        if not m.contains(var):
+                            unsatisfied.append(var)
+                        else:
+                            clause_s_set.add(var)
+
+                    clause_s = ' '.join(map(lambda x: f'{x}.', clause_s_set))
+                    clause_d = '1 { ' + '; '.join(map(str, unsatisfied)) + ' } ' + str(len(unsatisfied)) + '.'
+
+                    clause_r = str(len(clause_s_set) + 1) + ' { ' + '; '.join(map(str, instrumenter_vars)) + ' } ' + str(n_vars) + '.'
+
+                    if not minimum:
+                        print(clause_s)
+                        print(clause_d)
+                    else:
+                        print(clause_r)
+                    print()
+
+            if unsat:
+                return [self.instrumenter.instrumenter_var_map[var] for var in unsatisfied]
 
     def print_answer_sets(self):
         for a in sorted(self.answer_sets, key=len):

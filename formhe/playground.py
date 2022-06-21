@@ -1,24 +1,37 @@
-import clingo.ast
+from contextlib import contextmanager, ExitStack, redirect_stdout, redirect_stderr
 
-from asp.instance import Instance
-from asp.utils import is_fact, is_rule, is_integrity_constraint
+import os
+
+from formhe.asp.instance import Instance
 
 
-def ast_callback(ast: clingo.ast.AST):
-    print(ast)
-    print('Is fact?', is_fact(ast))
-    print('Is rule?', is_rule(ast))
-    print('Is integrity constraint?', is_integrity_constraint(ast))
-    print()
+@contextmanager
+def suppress(out=True, err=False):
+    with ExitStack() as stack:
+        with open(os.devnull, "w") as null:
+            if out:
+                stack.enter_context(redirect_stdout(null))
+            if err:
+                stack.enter_context(redirect_stderr(null))
+            yield
 
 
 instance = Instance('buggy_instances/nqueens/0.lp')
 
-instance.find_wrong_models(1000)
+for f in instance.ast:
+    print(f)
 
-print("Cores")
-instance.print_cores()
-print("GT Cores")
-instance.print_gt_cores()
-# instance.print_answer_sets()
+print()
 
+for f in instance.instrumented_ast:
+    print(f)
+
+unsats = instance.find_mcs("queen(7,1). queen(6, 2).", minimum=False)
+
+print(unsats)
+
+#
+
+#
+# for f in instance.instrumenter.assumption_combos():
+#     print(f)
