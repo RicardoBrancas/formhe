@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "formhe"
+version = "0.1.1"
+authors = [
+  { name="Ricardo Brancas", email="ricard.brancas@tecnico.ulisboa.pt" },
+]
+description = "A Formula Helper for easing the development of logic programs"
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+  "clingo~=5.5.2",
+  "ordered-set",
+  "tqdm",
+  "cvc5~=1.0.0"
+]

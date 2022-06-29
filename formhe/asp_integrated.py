@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
+from itertools import islice
+
+from ordered_set import OrderedSet
 
 from formhe.asp.instance import Instance
 from formhe.sygus.sygus_visitor import SyGuSVisitor
@@ -52,9 +55,13 @@ def main():
     else:
         query = ' '.join(args.query)
 
-    unsats = instance.find_mcs(query, args.find_minimum)
+    unsats_union = OrderedSet()
 
-    instance = Instance(args.INPUT, skips=unsats)
+    for unsat in islice(instance.find_mcs(query, args.find_minimum), 100):
+        for var in unsat:
+            unsats_union.add(var)
+
+    instance = Instance(args.INPUT, skips=unsats_union)
 
     print()
     print('Modified program:')
