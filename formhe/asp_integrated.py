@@ -54,9 +54,16 @@ def main():
 
     unsats = instance.find_mcs(query, args.find_minimum)
 
-    print(unsats)
-
     instance = Instance(args.INPUT, skips=unsats)
+
+    print()
+    print('Modified program:')
+    print()
+
+    for node in instance.ast:
+        print(node)
+
+    print()
 
     instance.find_wrong_models(max_sols=args.model_attempts)
     instance.generate_correct_models(max_sols=args.gt_model_attempts)

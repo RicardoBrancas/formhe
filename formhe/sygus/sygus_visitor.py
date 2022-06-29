@@ -195,7 +195,7 @@ class SyGuSVisitor:
                 if arg.type == SymbolType.Number:
                     args.append(self.solver.mkInteger(arg.number))
                 elif arg.type == SymbolType.Function and len(arg.arguments) == 0:
-                    args.append(self.solver.mkTerm(Kind.APPLY_CONSTRUCTOR, self.sygus.constantSort.getDatatype().getConstructorTerm(arg.name)))
+                    args.append(self.solver.mkTerm(Kind.APPLY_CONSTRUCTOR, self.sygus.constantSort.getDatatype().getConstructor(arg.name).getTerm()))
                 else:
                     raise NotImplementedError()
 

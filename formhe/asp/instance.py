@@ -26,32 +26,31 @@ class Instance:
         self.facts = []
         self.rules = []
         self.integrity_constraints = []
-        self.constantCollector = utils.ConstantCollector()
+        self.constantCollector = utils.Visitor(skips)
         self.instrumenter = utils.Instrumenter()
         self.ast = []
         self.instrumented_ast = []
 
         def ast_callback(ast):
-            self.ast.append(ast)
-            self.constantCollector.visit(ast)
-            if utils.is_fact(ast):
-                self.facts.append(ast)
-            elif utils.is_rule(ast):
-                self.rules.append(ast)
-            elif utils.is_integrity_constraint(ast):
-                self.integrity_constraints.append(ast)
-            else:
-                self.others.append(ast)
+            ast = self.constantCollector.visit(ast)
+            if ast is not None:
+                self.ast.append(ast)
+                if utils.is_fact(ast):
+                    self.facts.append(ast)
+                elif utils.is_rule(ast):
+                    self.rules.append(ast)
+                elif utils.is_integrity_constraint(ast):
+                    self.integrity_constraints.append(ast)
+                else:
+                    self.others.append(ast)
 
         def ast_instrumenter(ast):
-            self.instrumented_ast.append(self.instrumenter.visit(ast))
+            instrumented_ast = self.instrumenter.visit(ast)
+            if instrumented_ast is not None:
+                self.instrumented_ast.append(instrumented_ast)
 
         clingo.ast.parse_string(self.contents, ast_callback)
         clingo.ast.parse_string(self.contents, ast_instrumenter)
-
-        if skips:
-            self.ast = [ast for i, ast in enumerate(self.ast) if i not in skips]
-            self.instrumented_ast = [ast for i, ast in enumerate(self.instrumented_ast) if i not in skips]
 
         try:
             self.ground_truth_file = Path(filename).resolve().parent / re.search('%formhe-groundtruth:(.*)', self.contents)[1]
@@ -73,7 +72,7 @@ class Instance:
 
     def get_control(self, max_sols=0, *args):
         ctl = Control([f'{max_sols}'])
-        ctl.add('base', [], self.contents)
+        ctl.add('base', [], '\n'.join(map(str, self.ast)))
         for arg in args:
             ctl.add('base', [], arg)
         ctl.ground([('base', [])])
@@ -174,20 +173,18 @@ class Instance:
         print()
 
         clause_s_set = OrderedSet()
-        clause_s = ''
-        clause_d = ''
         clause_r = ''
+        last_clause_r = None
 
         while True:
-            if not minimum:
-                ctl = self.get_instrumented_control(1, generate_vars, clause_s, clause_d, query)
-            else:
-                ctl = self.get_instrumented_control(1, generate_vars, clause_r, query)
+            ctl = self.get_instrumented_control(1, generate_vars, clause_r, query)
 
             unsat = True
 
             with ctl.solve(yield_=True) as handle:
-                for m in handle:
+                m = handle.model()
+
+                if m:
                     unsat = False
                     unsatisfied = []
 
@@ -197,20 +194,26 @@ class Instance:
                         else:
                             clause_s_set.add(var)
 
-                    clause_s = ' '.join(map(lambda x: f'{x}.', clause_s_set))
-                    clause_d = '1 { ' + '; '.join(map(str, unsatisfied)) + ' } ' + str(len(unsatisfied)) + '.'
-
+                    last_clause_r = clause_r
                     clause_r = str(len(clause_s_set) + 1) + ' { ' + '; '.join(map(str, instrumenter_vars)) + ' } ' + str(n_vars) + '.'
 
-                    if not minimum:
-                        print(clause_s)
-                        print(clause_d)
-                    else:
-                        print(clause_r)
+                    print(clause_r)
                     print()
 
             if unsat:
-                return [self.instrumenter.instrumenter_var_map[var] for var in unsatisfied]
+                print(last_clause_r)
+                ctl = self.get_instrumented_control(0, generate_vars, last_clause_r, query)
+
+                with ctl.solve(yield_=True) as handle:
+                    for m in handle:
+                        unsatisfied = []
+                        for var in instrumenter_vars:
+                            if not m.contains(var):
+                                unsatisfied.append(var)
+                        print(unsatisfied)
+                        yield [self.instrumenter.instrumenter_var_map[var] for var in unsatisfied]
+
+                return
 
     def print_answer_sets(self):
         for a in sorted(self.answer_sets, key=len):

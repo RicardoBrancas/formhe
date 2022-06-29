@@ -39,9 +39,8 @@ def main():
     else:
         query = ' '.join(args.query)
 
-    unsats = instance.find_mcs(query, args.find_minimum)
-
-    print(unsats)
+    for unsats in instance.find_mcs(query, args.find_minimum):
+        print(unsats)
 
 
 if __name__ == '__main__':
