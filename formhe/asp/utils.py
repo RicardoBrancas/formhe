@@ -24,14 +24,24 @@ class Visitor(clingo.ast.Transformer):
 
     def __init__(self, skips: list[int] = None):
         self.constants = OrderedSet()
+        self.predicates = {}
         self.rule_counter = 0
         self.skips = skips
 
     def visit_Function(self, function):
+        arg_types = []
+        add = True
         for arg in function.arguments:
+            if arg.ast_type == clingo.ast.ASTType.SymbolicTerm:
+                arg_types.append(arg.symbol.type)
+            else:
+                add = False
+
             if arg.ast_type == clingo.ast.ASTType.SymbolicTerm and arg.symbol.type == clingo.SymbolType.Function and len(
                     arg.symbol.arguments) == 0:
                 self.constants.append(arg.symbol.name)
+        if add:
+            self.predicates[function.name] = arg_types
         return function
 
     def visit_Rule(self, rule):

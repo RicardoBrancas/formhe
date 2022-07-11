@@ -14,11 +14,11 @@ def mk_argument_parser():
 
     parser.add_argument('INPUT', help='A ``.lp`` file containing an incomplete ASP program.')
 
-    parser.add_argument('--model-attempts', default=2000, type=int, help='Number of models generated from the incomplete program')
-    parser.add_argument('--gt-model-attempts', default=2, type=int, help='Number of models generated from the complete program')
+    parser.add_argument('--model-attempts', default=4000, type=int, help='Number of models generated from the incomplete program')
+    parser.add_argument('--gt-model-attempts', default=5, type=int, help='Number of models generated from the complete program')
 
-    parser.add_argument('--max-cores', default=10, type=int, help='Maximum number of UNSAT cores used in the SyGuS sprecification')
-    parser.add_argument('--max-models', default=2, type=int, help='Maximum number of correct models used in the SyGuS sprecification')
+    parser.add_argument('--max-cores', default=20, type=int, help='Maximum number of UNSAT cores used in the SyGuS sprecification')
+    parser.add_argument('--max-models', default=5, type=int, help='Maximum number of correct models used in the SyGuS sprecification')
 
     parser.add_argument('--constrain-reflexive', action='store_true')
     parser.add_argument('--relax-pbe-constraints', action='store_true')

@@ -33,6 +33,7 @@ from formhe.sygus.sygus import SyGuSProblem
 #             body = sols[i][1]
 #         result += str(body)
 #     print(result)
+from sygus.sygus_to_asp import SyGuSToASP
 
 
 def unsat_core_by_fun(unsat_core: Iterable[Symbol]) -> Dict[str, List[Symbol]]:
@@ -62,14 +63,13 @@ class SyGuSVisitor:
         self.solver.setOption('incremental', 'true')
         self.solver.setOption('sygus-enum', 'fast')
 
-        self.solver.setLogic('LIA')
-
         Int = self.solver.getIntegerSort()
         Bool = self.solver.getBooleanSort()
 
         min_core = sorted(unsat_cores, key=len)[skip_cores:][0]
 
-        vars_by_sym = defaultdict(lambda: defaultdict(list))
+        self.vars_by_sym = defaultdict(lambda: defaultdict(list))
+        self.sym_by_vars = {}
         self.num_by_sym = defaultdict(lambda: 0)
 
         self.sygus = SyGuSProblem('f')
@@ -85,10 +85,12 @@ class SyGuSVisitor:
                 for arg_i, arg in enumerate(sym.arguments):
                     if arg.type == SymbolType.Number:
                         self.sygus.add_input(Int, self.solver.mkVar(Int, f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
-                        vars_by_sym[sym.name][sym_i].append(self.sygus.inputs[-1])
+                        self.vars_by_sym[sym.name][sym_i].append(self.sygus.inputs[-1])
+                        self.sym_by_vars[self.sygus.inputs[-1]] = (sym.name, sym_i, arg_i)
                     elif arg.type == SymbolType.Function and len(arg.arguments) == 0:
                         self.sygus.add_input(self.sygus.constantSort, self.solver.mkVar(self.sygus.constantSort, f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
-                        vars_by_sym[sym.name][sym_i].append(self.sygus.inputs[-1])
+                        self.vars_by_sym[sym.name][sym_i].append(self.sygus.inputs[-1])
+                        self.sym_by_vars[self.sygus.inputs[-1]] = (sym.name, sym_i, arg_i)
                         pass
                     else:
                         raise NotImplementedError()
@@ -125,15 +127,17 @@ class SyGuSVisitor:
         self.f = self.sygus.get_synth_fun(self.solver)
 
         if constrain_reflexive:
-            temp_vars = [self.solver.declareSygusVar(var.getSort(), string.ascii_lowercase[var_i]) for var_i, var in enumerate(self.sygus.inputs)]
+            for sym in self.vars_by_sym.keys():
+                temp_vars = [self.solver.declareSygusVar(string.ascii_lowercase[var_i], var.getSort()) for var_i, var in enumerate(self.sygus.inputs)]
 
-            args_permutations = list((map(list, map(itertools.chain.from_iterable, itertools.permutations(vars_by_sym['queen'].values())))))
-            args_permutations = [[temp_vars[self.sygus.inputs.index(elem)] for elem in perm] for perm in args_permutations]
+                args_permutations = list((map(list, map(itertools.chain.from_iterable, itertools.permutations(self.vars_by_sym[sym].values())))))
+                args_permutations = [[temp_vars[self.sygus.inputs.index(elem)] for elem in perm] for perm in args_permutations]
 
-            for args1, args2 in zip(itertools.repeat(temp_vars), args_permutations):
-                term1 = self.solver.mkTerm(Kind.APPLY_UF, self.f, *args1)
-                term2 = self.solver.mkTerm(Kind.APPLY_UF, self.f, *args2)
-                self.sygus.add_constraint(self.solver.mkTerm(Kind.EQUAL, term1, term2))
+                if args_permutations:
+                    for args1, args2 in zip(itertools.repeat(temp_vars), args_permutations):
+                        term1 = self.solver.mkTerm(Kind.APPLY_UF, self.f, *args1)
+                        term2 = self.solver.mkTerm(Kind.APPLY_UF, self.f, *args2)
+                        self.sygus.add_constraint(self.solver.mkTerm(Kind.EQUAL, term1, term2))
 
     def solve(self, max_cores, max_models, skip_cores=0):
         # print(self.sygus)
@@ -183,10 +187,14 @@ class SyGuSVisitor:
 
         # print(self.sygus)
 
-        print('\nSolutions:\n')
+        print('\nSuggestions:\n')
+
+        sygus_to_asp = SyGuSToASP(self.sym_by_vars, self.vars_by_sym)
 
         for solution in self.sygus.enumerate(self.solver):
             print(solution)
+            print(sygus_to_asp.visit_statement(solution))
+            print()
 
     def combo_to_args(self, combo):
         args = []

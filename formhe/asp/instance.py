@@ -52,6 +52,8 @@ class Instance:
         clingo.ast.parse_string(self.contents, ast_callback)
         clingo.ast.parse_string(self.contents, ast_instrumenter)
 
+        print(self.constantCollector.predicates)
+
         try:
             self.ground_truth_file = Path(filename).resolve().parent / re.search('%formhe-groundtruth:(.*)', self.contents)[1]
             self.ground_truth_file = self.ground_truth_file.resolve()

@@ -1,3 +1,4 @@
+%formhe-groundtruth:../../examples/locking.lp
 formhe_definition_begin.
 
 adj(8, 9). adj(8, 4). adj(9, 4). adj(9, 10). adj(4, 10).
@@ -18,7 +19,7 @@ reach(R1, R2) :- room(R1), room(R2), room(R3), reach(R1, R3), evac(R3, R2).
 
 ok(R) :- room(R), reach(R, X), exit(X).
 
-:- not ok(R), room(R).
+%:- not ok(R), room(R).
 
 { evac(R1, R2) ; evac(R2, R1) } 1 :- adj(R1, R2).
 

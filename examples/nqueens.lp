@@ -1,13 +1,9 @@
-% generate
-
 #const n = 8.
 
 row(1..n).
 col(1..n).
 
 n { queen(I, J) : row(I), col(J) } n.
-
-% test
 
 :- queen(I, J1), queen(I, J2), J1 != J2.
 :- queen(I1, J), queen(I2, J), I1 != I2.
