@@ -1,46 +1,42 @@
 #!/usr/bin/env python
 
-import argparse
+import logging
+
+from ordered_set import OrderedSet
 
 from formhe.asp.instance import Instance
-from formhe.sygus.sygus_visitor import SyGuSVisitor
+from formhe.utils import config, perf
 
-
-def mk_argument_parser():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('INPUT', help='A ``.lp`` file containing an incomplete ASP program.')
-
-    parser.add_argument('--find-minimum', action='store_true', help='Find a minimum MCS instead of a minimal one.')
-
-    parser.add_argument("--query", action="extend", nargs="+", type=str, help='A set of atoms which should appear in some model but do not')
-
-    return parser
+logger = logging.getLogger('formhe.asp.bug_finder')
 
 
 def main():
-    parser = mk_argument_parser()
+    logger.info('Starting FormHe ASP bug finder')
+    logger.info('%s', config.get())
 
-    args = parser.parse_args()
+    logger.info('Loading instance from %s', config.get().input_file)
+    instance = Instance(config.get().input_file)
 
-    instance = Instance(args.INPUT)
+    logger.debug('Instrumented program:\n%s', '\n'.join(str(x) for x in instance.instrumented_ast))
 
-    print('Instrumented program:\n')
+    unsats_union = OrderedSet()
 
-    for node in instance.instrumented_ast:
-        print(node)
+    perf.timer_start(perf.FAULT_LOCALIZATION_TIME)
+    for unsat in instance.find_mcs():
+        for var in unsat:
+            unsats_union.add(var)
+    perf.timer_stop(perf.FAULT_LOCALIZATION_TIME)
 
-    print()
+    if unsats_union:
+        instance = Instance(config.get().input_file, skips=unsats_union)
 
-    if not args.query and instance.mcs_query:
-        print('Reading query from instance file...')
-        print(instance.mcs_query)
-        query = instance.mcs_query
+        print('You solution is not correct. There is likely one or more bugs in the following statements:\n')
+
+        for elem in instance.constantCollector.skipped:
+            print(elem)
+
     else:
-        query = ' '.join(args.query)
-
-    for unsats in instance.find_mcs(query, args.find_minimum):
-        print(unsats)
+        print('No problems found')
 
 
 if __name__ == '__main__':

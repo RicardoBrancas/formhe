@@ -1,29 +1,31 @@
-from contextlib import contextmanager, ExitStack, redirect_stdout, redirect_stderr
+import signal
+import time
 
-import os
-
+from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
 from formhe.asp.instance import Instance
+from formhe.trinity.z3_enumerator import Z3Enumerator
 
+instance = Instance('generated_instances/nqueens/0.lp')
 
-@contextmanager
-def suppress(out=True, err=False):
-    with ExitStack() as stack:
-        with open(os.devnull, "w") as null:
-            if out:
-                stack.enter_context(redirect_stdout(null))
-            if err:
-                stack.enter_context(redirect_stderr(null))
-            yield
+spec_generator = ASPSpecGenerator(instance, 2)
+trinity_spec = spec_generator.trinity_spec
 
+signal.signal(signal.SIGINT, signal.default_int_handler)
 
-instance = Instance('buggy_instances/nqueens/0.lp')
+x = 0
+start = time.time()
+for i in range(2, 4):
+    enumerator = Z3Enumerator(trinity_spec, i)
+    while prog := enumerator.next():
+        x += 1
+        print(prog)
+        enumerator.update()
+        if x == 2000:
+            break
+    if x == 2000:
+        break
 
-instance.find_wrong_models(1000)
-
-print(unsats)
-
-#
-
-#
-# for f in instance.instrumenter.assumption_combos():
-#     print(f)
+print(x)
+elapsed = time.time() - start
+print('Took', elapsed)
+print(x / elapsed, 'enums/s')

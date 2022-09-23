@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "formhe"
-version = "0.1.1"
+version = "0.3.3"
 authors = [
   { name="Ricardo Brancas", email="ricard.brancas@tecnico.ulisboa.pt" },
 ]
@@ -16,5 +16,11 @@ dependencies = [
   "clingo~=5.5.2",
   "ordered-set",
   "tqdm",
-  "cvc5~=1.0.0"
+  "cvc5~=1.0.0",
+  "argparse-dataclass",
+  "cvc5~=1.0.1",
+  "z3-solver~=4.11.2"
 ]
+
+[project.scripts]
+"formhe-bug-find" = "formhe.asp_bug_finder:main"

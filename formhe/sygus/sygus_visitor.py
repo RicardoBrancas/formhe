@@ -1,8 +1,10 @@
 import itertools
+import logging
 import string
 from collections import defaultdict
 from typing import Dict, List, Iterable, Collection
 
+import clingo
 import cvc5
 from clingo.symbol import Symbol, SymbolType
 from cvc5 import Kind
@@ -10,6 +12,7 @@ from cvc5 import Kind
 from formhe.asp.instance import Instance
 from formhe.sygus.sygus import SyGuSProblem
 
+logger = logging.getLogger('formhe.asp.sygus')
 
 # def define_fun_to_string(f, params, body):
 #     sort = f.getSort()
@@ -50,7 +53,8 @@ def unsat_core_by_fun(unsat_core: Iterable[Symbol]) -> Dict[str, List[Symbol]]:
 
 class SyGuSVisitor:
 
-    def __init__(self, instance: Instance, unsat_cores: Collection[Collection[Symbol]], valid_models, relax_pbe_constraints=False, constrain_reflexive=False, skip_cores=0):
+    def __init__(self, instance: Instance, unsat_cores: Collection[Collection[Symbol]], valid_models,
+                 relax_pbe_constraints=False, constrain_reflexive=False, skip_cores=0):
         self.instance = instance
         self.unsat_cores = unsat_cores
         self.models = valid_models
@@ -62,6 +66,8 @@ class SyGuSVisitor:
         self.solver.setOption('lang', 'sygus2')
         self.solver.setOption('incremental', 'true')
         self.solver.setOption('sygus-enum', 'fast')
+
+        self.solver.setLogic('ALL')
 
         Int = self.solver.getIntegerSort()
         Bool = self.solver.getBooleanSort()
@@ -84,11 +90,13 @@ class SyGuSVisitor:
             if sym.type == SymbolType.Function:
                 for arg_i, arg in enumerate(sym.arguments):
                     if arg.type == SymbolType.Number:
-                        self.sygus.add_input(Int, self.solver.mkVar(Int, f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
+                        self.sygus.add_input(Int, self.solver.mkVar(Int,
+                                                                    f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
                         self.vars_by_sym[sym.name][sym_i].append(self.sygus.inputs[-1])
                         self.sym_by_vars[self.sygus.inputs[-1]] = (sym.name, sym_i, arg_i)
                     elif arg.type == SymbolType.Function and len(arg.arguments) == 0:
-                        self.sygus.add_input(self.sygus.constantSort, self.solver.mkVar(self.sygus.constantSort, f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
+                        self.sygus.add_input(self.sygus.constantSort, self.solver.mkVar(self.sygus.constantSort,
+                                                                                        f'{sym.name}_{string.ascii_uppercase[sym_i]}_{arg_i}'))
                         self.vars_by_sym[sym.name][sym_i].append(self.sygus.inputs[-1])
                         self.sym_by_vars[self.sygus.inputs[-1]] = (sym.name, sym_i, arg_i)
                         pass
@@ -115,7 +123,8 @@ class SyGuSVisitor:
                 (Kind.SUB, I, I),
                 (Kind.ABS, I),
                 0, 1, 2},
-            C: [(Kind.APPLY_CONSTRUCTOR, self.sygus.constantSort.getDatatype().getConstructor(const).getTerm()) for const in self.sygus.constructors.keys()]
+            C: [(Kind.APPLY_CONSTRUCTOR, self.sygus.constantSort.getDatatype().getConstructor(const).getTerm()) for
+                const in self.sygus.constructors.keys()]
         }, self.solver)
 
         for sort, vars in self.sygus.inputs_by_sort.items():
@@ -128,10 +137,13 @@ class SyGuSVisitor:
 
         if constrain_reflexive:
             for sym in self.vars_by_sym.keys():
-                temp_vars = [self.solver.declareSygusVar(string.ascii_lowercase[var_i], var.getSort()) for var_i, var in enumerate(self.sygus.inputs)]
+                temp_vars = [self.solver.declareSygusVar(string.ascii_lowercase[var_i], var.getSort()) for var_i, var in
+                             enumerate(self.sygus.inputs)]
 
-                args_permutations = list((map(list, map(itertools.chain.from_iterable, itertools.permutations(self.vars_by_sym[sym].values())))))
-                args_permutations = [[temp_vars[self.sygus.inputs.index(elem)] for elem in perm] for perm in args_permutations]
+                args_permutations = list((map(list, map(itertools.chain.from_iterable,
+                                                        itertools.permutations(self.vars_by_sym[sym].values())))))
+                args_permutations = [[temp_vars[self.sygus.inputs.index(elem)] for elem in perm] for perm in
+                                     args_permutations]
 
                 if args_permutations:
                     for args1, args2 in zip(itertools.repeat(temp_vars), args_permutations):
@@ -192,6 +204,7 @@ class SyGuSVisitor:
         sygus_to_asp = SyGuSToASP(self.sym_by_vars, self.vars_by_sym)
 
         for solution in self.sygus.enumerate(self.solver):
+            logger.info('Solution Found')
             print(solution)
             print(sygus_to_asp.visit_statement(solution))
             print()
@@ -203,7 +216,9 @@ class SyGuSVisitor:
                 if arg.type == SymbolType.Number:
                     args.append(self.solver.mkInteger(arg.number))
                 elif arg.type == SymbolType.Function and len(arg.arguments) == 0:
-                    args.append(self.solver.mkTerm(Kind.APPLY_CONSTRUCTOR, self.sygus.constantSort.getDatatype().getConstructor(arg.name).getTerm()))
+                    args.append(self.solver.mkTerm(Kind.APPLY_CONSTRUCTOR,
+                                                   self.sygus.constantSort.getDatatype().getConstructor(
+                                                       arg.name).getTerm()))
                 else:
                     raise NotImplementedError()
 

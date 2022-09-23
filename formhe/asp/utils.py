@@ -25,12 +25,16 @@ class Visitor(clingo.ast.Transformer):
     def __init__(self, skips: list[int] = None):
         self.constants = OrderedSet()
         self.predicates = {}
+        self.predicates_typed = {}
         self.rule_counter = 0
         self.skips = skips
+        self.skipped = []
 
     def visit_Function(self, function):
         arg_types = []
         add = True
+        if function.name:
+            self.predicates[function.name] = len(function.arguments)
         for arg in function.arguments:
             if arg.ast_type == clingo.ast.ASTType.SymbolicTerm:
                 arg_types.append(arg.symbol.type)
@@ -41,7 +45,7 @@ class Visitor(clingo.ast.Transformer):
                     arg.symbol.arguments) == 0:
                 self.constants.append(arg.symbol.name)
         if add:
-            self.predicates[function.name] = arg_types
+            self.predicates_typed[function.name] = arg_types
         return function
 
     def visit_Rule(self, rule):
@@ -53,6 +57,7 @@ class Visitor(clingo.ast.Transformer):
             pass
 
         if self.skips is not None and self.rule_counter - 1 in self.skips:
+            self.skipped.append(rule)
             return None
         else:
             rule.update(**self.visit_children(rule))
@@ -64,8 +69,8 @@ class Instrumenter(clingo.ast.Transformer):
     def __init__(self):
         self.counter = 0
         self.rule_counter = 0
-        self.instrumenter_vars = []
-        self.instrumenter_var_map = {}
+        self.relaxation_functions = []
+        self.relaxations_function_map = {}
         self.disabled = False
 
     def visit_Rule(self, rule):
@@ -84,20 +89,26 @@ class Instrumenter(clingo.ast.Transformer):
             pass
 
         if not self.disabled:
-            instrumenter_var = clingo.ast.Variable(rule.location, f"instrumenter_{self.counter}")
-            self.instrumenter_vars.append(clingo.Function(f"instrumenter_{self.counter}"))
-            self.instrumenter_var_map[clingo.Function(f"instrumenter_{self.counter}")] = self.rule_counter - 1
+            relaxation_function = clingo.Function(f"_instrumenter", [clingo.Number(self.counter)])
+            self.relaxation_functions.append(relaxation_function)
+            self.relaxations_function_map[relaxation_function] = self.rule_counter - 1
+            rule.body.append(clingo.ast.Literal(rule.location,
+                                                clingo.ast.Sign.NoSign,
+                                                clingo.ast.SymbolicAtom(
+                                                    clingo.ast.Function(rule.location,
+                                                                        f"_instrumenter",
+                                                                        [clingo.ast.SymbolicTerm(rule.location, clingo.Number(self.counter))],
+                                                                        0))))
             self.counter += 1
-            rule.body.append(instrumenter_var)
             return rule
         else:
             return rule
 
     def assumption_combos(self):
-        for combo in itertools.product([True, False], repeat=len(self.instrumenter_vars)):
+        for combo in itertools.product([True, False], repeat=len(self.relaxation_functions)):
             str = ''
             disabled = []
-            for i, (var, val) in enumerate(zip(self.instrumenter_vars, combo)):
+            for i, (var, val) in enumerate(zip(self.relaxation_functions, combo)):
                 if val:
                     str += f'{var}. '
                 else:

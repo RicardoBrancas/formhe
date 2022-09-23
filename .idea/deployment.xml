@@ -6,7 +6,8 @@
       <paths name="aquila">
         <serverdata>
           <mappings>
-            <mapping deploy="formhe" local="$PROJECT_DIR$/build/html" web="/formhe" />
+            <mapping deploy="/public_html" local="$PROJECT_DIR$/build/html" web="/formhe" />
+            <mapping deploy="/formhe" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

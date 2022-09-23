@@ -59,6 +59,7 @@ class SyGuSProblem:
         g = solver.mkGrammar(self.inputs, self.grammar.keys())
 
         for lhs, rhs in self.grammar.items():
+            print(lhs, rhs)
             g.addRules(lhs, rhs)
 
         return g

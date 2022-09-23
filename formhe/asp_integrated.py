@@ -1,82 +1,139 @@
 #!/usr/bin/env python
 
-import argparse
-from itertools import islice
+import logging
+import traceback
 
 from ordered_set import OrderedSet
 
+from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
+from formhe.asp.synthesis.AspInterpreter import AspInterpreter
+from formhe.asp.synthesis.AspVisitor import AspVisitor
+from formhe.asp.synthesis.StatementEnumerator import StatementEnumerator
 from formhe.asp.instance import Instance
-from formhe.sygus.sygus_visitor import SyGuSVisitor
+from formhe.trinity.z3_enumerator import Z3Enumerator
+from formhe.utils import config
+from formhe.utils import perf, algs
 
-
-def mk_argument_parser():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('INPUT', help='A ``.lp`` file containing an incomplete ASP program.')
-
-    parser.add_argument('--model-attempts', default=4000, type=int, help='Number of models generated from the incomplete program')
-    parser.add_argument('--gt-model-attempts', default=5, type=int, help='Number of models generated from the complete program')
-
-    parser.add_argument('--max-cores', default=20, type=int, help='Maximum number of UNSAT cores used in the SyGuS sprecification')
-    parser.add_argument('--max-models', default=5, type=int, help='Maximum number of correct models used in the SyGuS sprecification')
-
-    parser.add_argument('--constrain-reflexive', action='store_true')
-    parser.add_argument('--relax-pbe-constraints', action='store_true')
-
-    parser.add_argument('--find-minimum', action='store_true', help='Find a minimum MCS instead of a minimal one.')
-
-    parser.add_argument("--query", action="extend", nargs="+", type=str, help='A set of atoms which should appear in some model but do not')
-
-    debug_group = parser.add_argument_group(title='Debug Options')
-
-    debug_group.add_argument('--skip-cores', default=0, type=int)
-
-    return parser
+logger = logging.getLogger('formhe.asp.integrated')
 
 
 def main():
-    parser = mk_argument_parser()
+    logger.info('Starting FormHe ASP integrated bug fixer')
+    logger.info('%s', config.get())
 
-    args = parser.parse_args()
+    logger.info('Loading instance from %s', config.get().input_file)
+    instance = Instance(config.get().input_file)
 
-    instance = Instance(args.INPUT)
-
-    print('Instrumented program:\n')
-
-    for node in instance.instrumented_ast:
-        print(node)
-
-    print()
-
-    if not args.query and instance.mcs_query:
-        print('Reading query from instance file...')
-        print(instance.mcs_query)
-        query = instance.mcs_query
-    else:
-        query = ' '.join(args.query)
+    logger.debug('Instrumented program:\n%s', '\n'.join(str(x) for x in instance.instrumented_ast))
 
     unsats_union = OrderedSet()
 
-    for unsat in islice(instance.find_mcs(query, args.find_minimum), 100):
+    perf.timer_start(perf.FAULT_LOCALIZATION_TIME)
+    for unsat in instance.find_mcs():
         for var in unsat:
             unsats_union.add(var)
+    perf.timer_stop(perf.FAULT_LOCALIZATION_TIME)
 
-    instance = Instance(args.INPUT, skips=unsats_union)
+    instance = Instance(config.get().input_file, skips=unsats_union)
 
-    print()
-    print('Modified program:')
-    print()
+    for a in instance.constantCollector.skipped:
+        print(a)
 
-    for node in instance.ast:
-        print(node)
+    spec_generator = ASPSpecGenerator(instance, 2)
+    trinity_spec = spec_generator.trinity_spec
 
-    print()
+    asp_visitor = AspVisitor(trinity_spec)
 
-    instance.find_wrong_models(max_sols=args.model_attempts)
-    instance.generate_correct_models(max_sols=args.gt_model_attempts)
+    if len(instance.constantCollector.skipped) > 1:
+        raise NotImplementedError()
 
-    sygus = SyGuSVisitor(instance, instance.cores, instance.answer_sets, relax_pbe_constraints=args.relax_pbe_constraints, constrain_reflexive=args.constrain_reflexive, skip_cores=args.skip_cores)
-    sygus.solve(max_cores=args.max_cores, max_models=args.max_models, skip_cores=args.skip_cores)
+    preset_atoms = []
+    for rule in instance.constantCollector.skipped:
+        preset_atoms.append(asp_visitor.visit(rule))
+        print(preset_atoms[-1])
+
+    asp_interpreter = AspInterpreter(instance)
+    perf.timer_start(perf.ANSWER_SET_ENUM_TIME)
+    if not config.get().no_semantic_constraints:
+        instance.find_wrong_models(max_sols=1000)
+    instance.generate_correct_models(config.get().n_gt_sols_generated)
+    perf.timer_stop(perf.ANSWER_SET_ENUM_TIME)
+
+    sorted_cores = sorted(instance.cores, key=len)
+
+    hammings = []
+    for m_a in instance.answer_sets:
+        str_a = ' '.join([str(x) for x in m_a])
+        for m_b in instance.answer_sets:
+            if m_b != m_a:
+                str_b = ' '.join([str(x) for x in m_b])
+                hammings.append(algs.hamming(str_a, str_b))
+
+    if len(hammings) > 0:
+        logger.info('Average hamming distance of ground truth models: %f', sum(hammings) / len(hammings))
+
+    solved = False
+    enums = 0
+    for depth in range(config.get().minimum_depth, config.get().maximum_depth):
+        # perf.timer_start(perf.TMP_TIME)
+        atom_enum_constructor = lambda n, p: Z3Enumerator(trinity_spec, depth, n, predicates_names=instance.constantCollector.predicates.keys(), cores=sorted_cores, free_vars=asp_visitor.free_vars,
+                                                          preset_atoms=p)
+        statement_enumerator = StatementEnumerator(atom_enum_constructor, preset_atoms[0], 1, asp_visitor.free_vars, depth)
+        # perf.timer_stop(perf.TMP_TIME)
+
+        perf.timer_start(perf.EVAL_FAIL_TIME)
+        while prog := next(statement_enumerator):
+            enums += 1
+            # if enums >= 5000:
+            #     perf.log()
+            #     print(instance.answer_sets_asm)
+            #     enums = 0
+            perf.counter_inc(perf.ENUM_PROGRAMS)
+            perf.timer_start(perf.EVAL_TIME)
+            try:
+                asp_prog = asp_interpreter.eval(prog)
+                # logger.debug(asp_prog)
+                # print(asp_prog)
+
+                res = asp_interpreter.test(asp_prog)
+                if res:
+                    logger.info('Solution found')
+                    print(asp_prog)
+                    solved = True
+                    break
+            except RuntimeError as e:
+                perf.timer_stop(perf.EVAL_FAIL_TIME)
+                perf.counter_inc(perf.EVAL_FAIL_PROGRAMS)
+                logger.warning('Failed to parse: %s', prog)
+                traceback.print_exception(e)
+                # print('EVAL EXCEPTION')
+            except Exception as e:
+                # traceback.print_exception(e)
+                raise e
+            perf.timer_stop(perf.EVAL_TIME)
+            perf.timer_start(perf.EVAL_FAIL_TIME)
+
+        if solved:
+            break
+
+    logger.info(instance.ground_truth.check_model.cache_info())
+
+    # print()
+    # print('Modified program:')
+    # print()
+    #
+    # for node in instance.ast:
+    #     print(node)
+    #
+    # print()
+    #
+    # instance.find_wrong_models(max_sols=args.model_attempts)
+    # instance.generate_correct_models(max_sols=args.gt_model_attempts)
+    #
+    # sygus = SyGuSVisitor(instance, instance.cores, instance.answer_sets,
+    #                      relax_pbe_constraints=args.relax_pbe_constraints, constrain_reflexive=args.constrain_reflexive,
+    #                      skip_cores=args.skip_cores)
+    # sygus.solve(max_cores=args.max_cores, max_models=args.max_models, skip_cores=args.skip_cores)
 
 
 if __name__ == '__main__':
