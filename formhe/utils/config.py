@@ -1,7 +1,9 @@
 import argparse
 import base64
 import logging
+import os
 import sys
+import fcntl
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -50,7 +52,17 @@ _config: Config = parser.parse_args()
 logging.basicConfig(level=_config.logging_level, format='%(relativeCreated)8d | %(levelname)s | %(name)s | %(message)s')
 logger = logging.getLogger('formhe')
 
-stdin_content = sys.stdin.readlines()
+fd = sys.stdin.fileno()
+fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+
+try:
+    lines = sys.stdin.readlines()
+    lines.insert(0, 'formhe_definition_begin.')
+    lines.append('formhe_definition_end.')
+    stdin_content = lines
+except:
+    stdin_content = []
 
 
 def store(conf: Config):

@@ -4,9 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "formhe"
-version = "0.3.3"
+version = "0.3.8"
 authors = [
-  { name="Ricardo Brancas", email="ricard.brancas@tecnico.ulisboa.pt" },
+  { name="Ricardo Brancas", email="ricardo.brancas@tecnico.ulisboa.pt" },
 ]
 description = "A Formula Helper for easing the development of logic programs"
 readme = "README.md"
@@ -16,7 +16,7 @@ dependencies = [
   "clingo~=5.5.2",
   "ordered-set",
   "tqdm",
-  "cvc5~=1.0.0",
+  "cvc5~=1.0.1",
   "argparse-dataclass",
   "cvc5~=1.0.1",
   "z3-solver~=4.11.2"

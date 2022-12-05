@@ -57,7 +57,7 @@ class Instance:
                     field_found = True
                     break
             if not field_found:
-                raise AttributeError()
+                raise AttributeError(key)
             if field.type is list:
                 object.__setattr__(self.config, key, list(value.split(' ')))
             else:
@@ -249,7 +249,6 @@ class Instance:
         generate_vars = '0 { ' + '; '.join(map(str, instrumenter_vars)) + ' } ' + str(n_vars) + '.'
 
         clause_r = ''
-        last_clause_r = None
 
         if self.config.mcs_query:
             negated_query = ' '.join([':- not ' + x + '.' for x in self.config.mcs_query.split('.') if x])
@@ -263,6 +262,8 @@ class Instance:
         logger.info('Transformed query: %s', negated_query)
 
         logger.info('Starting MCS iterations')
+        satisfied_vars = []
+        last_clause_r = ''
         while True:
             ctl = self.get_control(generate_vars, clause_r, negated_query, max_sols=1, instrumented=True)
 

@@ -1,0 +1,9 @@
+{scc(V)} :- vertex(V).
+
+reach(V,V) :- vertex(V).
+reach(V1,V2) :- edge(V1,V2).
+reach(V1,V2) :- reach(V1,V3), edge(V3,V2).
+
+:- scc(V1), scc(V2), not reach(V1,V2).
+
+#maximize{1,V : scc(V)}.

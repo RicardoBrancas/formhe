@@ -1,6 +1,3 @@
-
-
-
 #const k = 2.
 
 formhe_definition_begin.

@@ -30,13 +30,55 @@ def main():
     if unsats_union:
         instance = Instance(config.get().input_file, skips=unsats_union)
 
-        print('You solution is not correct. There is likely one or more bugs in the following statements:\n')
+        print('Your solution is not correct. There is likely one or more bugs in the following statements:\n')
 
         for elem in instance.constantCollector.skipped:
             print(elem)
 
     else:
-        print('No problems found')
+        overconstrained = False
+        underconstrained = False
+        overconstrained_why = None
+        underconstrained_why = None
+
+        control = instance.get_control()
+        with control.solve(yield_=True) as handle:
+            for m in handle:
+                m_ord = frozenset(m.symbols(shown=True))
+                if not instance.ground_truth.check_model(m_ord):
+                    underconstrained = True
+                    underconstrained_why = m_ord
+                    break
+
+        control = instance.ground_truth.get_control()
+        with control.solve(yield_=True) as handle:
+            for m in handle:
+                m_ord = frozenset(m.symbols(shown=True))
+                if not instance.check_model(m_ord):
+                    overconstrained = True
+                    overconstrained_why = m_ord
+                    break
+
+        if underconstrained and overconstrained:
+            print('Your solution is incorrect.')
+        elif underconstrained:
+            print('Your solution is likely underconstrained.')
+        elif overconstrained:
+            print('Your solution is likely overconstrained.')
+        else:
+            print('No problems found')
+
+        if underconstrained_why:
+            print('The following should not be a valid answer set, but it is in your solution:')
+            for atom in underconstrained_why:
+                print(atom, end='. ')
+            print()
+
+        if overconstrained_why:
+            print('The following should be a valid answer set, but it is not in your solution:')
+            for atom in overconstrained_why:
+                print(atom, end='. ')
+            print()
 
 
 if __name__ == '__main__':
