@@ -1,3 +1,0 @@
-k{sel(S) : e(_,S)}.
-
-:- sel(S1), not sel(S2), e(E,S2), not e(E,S1).

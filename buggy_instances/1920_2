@@ -1,6 +1,0 @@
-node(V) :- e(V,_).
-node(V) :- e(_,V).
-
-1{assign(V,1..2)}1 :- node(V).
-
-:- assign(V1, N), assign(V2,N), V1!=V2, e(V1,V2).

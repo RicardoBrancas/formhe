@@ -2,54 +2,53 @@ import copy
 import dataclasses
 import logging
 import re
-from functools import lru_cache
+import typing
+from functools import cached_property
+from itertools import product
 from pathlib import Path
-from typing import Iterable, Sequence, Tuple
 
 import clingo.ast
-from clingo import Control, Symbol
-from ordered_set import OrderedSet
-from tqdm import tqdm
 
-from formhe.asp.utils import Visitor, Instrumenter, is_fact, is_rule, is_integrity_constraint
-from formhe.exceptions.solver_exceptions import NoGroundTruthException
-from formhe.utils import perf, config
-from formhe.utils.ml import MultiArmedBandit
+import utils.clingo
+from clingo import Control
+
+from ordered_set import OrderedSet
+
+import runhelper
+from formhe.asp.utils import Visitor, Instrumenter
+from formhe.exceptions.parser_exceptions import InstanceParseException, InstanceGroundingException
+from formhe.utils import config, iterutils
 
 logger = logging.getLogger('formhe.asp.instance')
 
 
 class Instance:
 
-    def __init__(self, filename: str = None, ast: clingo.ast.AST = None, skips: list[int] = None, parent_config: config.Config = None):
+    def __init__(self, filename: str = None, ast: clingo.ast.AST = None, skips: list[int] = None, parent_config: config.Config = None, ground_truth_instance=None):
         if (filename is not None and ast is not None) or (filename is None and ast is None):
             raise ValueError("Need to supply exactly one of {filename, ast}.")
 
         if filename is not None:
             with open(filename) as f:
-                self.contents = f.read() + '\n'.join(config.stdin_content)
+                self.raw_input = f.read() + '\n'.join(config.stdin_content)
         elif ast is not None:
-            self.contents = '\n'.join(map(str, ast))
-
-        self.others = []
-        self.facts = []
-        self.rules = []
-        self.integrity_constraints = []
-        self.constantCollector = Visitor(skips)
-        self.instrumenter = Instrumenter()
-        self.ast = []
-        self.instrumented_ast = []
-        self.var_ctr = 0
+            self.raw_input = '\n'.join(map(str, ast))
 
         if not parent_config:
             self.config = copy.copy(config.get())
         else:
             self.config = copy.copy(parent_config)
 
-        matches = re.findall(r'%formhe-([a-zA-Z-_]*):(.*)', self.contents)
-        for override in matches:
-            key = override[0].replace('-', '_')
-            value = override[1]
+        matches = re.findall(r'%formhe-([a-zA-Z0-9-_]*?):(.*)', self.raw_input)
+        compact_matches = dict()
+        for key, value in matches:
+            key = key.replace('-', '_')
+            if key in compact_matches:
+                compact_matches[key] += ' ' + value
+            else:
+                compact_matches[key] = value
+
+        for key, value in compact_matches.items():
             logger.info('Overriding local config %s: %s', key, value)
             field_found = False
             for field in dataclasses.fields(config.Config):
@@ -58,37 +57,60 @@ class Instance:
                     break
             if not field_found:
                 raise AttributeError(key)
-            if field.type is list:
-                object.__setattr__(self.config, key, list(value.split(' ')))
+            if field.type is list or typing.get_origin(field.type) is list:
+                if field.metadata and 'type' in field.metadata and callable(field.metadata['type']):
+                    object.__setattr__(self.config, key, [field.metadata['type'](v) for v in value.split(' ') if v])
+                else:
+                    object.__setattr__(self.config, key, [v for v in value.split(' ') if v])
+            elif field.type is bool:
+                try:
+                    object.__setattr__(self.config, key, config.strtobool(value))
+                except:
+                    object.__setattr__(self.config, key, value)
+            elif field.metadata and 'type' in field.metadata and callable(field.metadata['type']):
+                try:
+                    object.__setattr__(self.config, key, field.metadata['type'](value))
+                except:
+                    object.__setattr__(self.config, key, value)
             else:
                 object.__setattr__(self.config, key, value)
 
+        if not self.config.instance_base64:
+            self.inputs = [self.raw_input]
+        else:
+            self.inputs = []
+            for instance64 in self.config.instance_base64:
+                self.inputs.append(self.raw_input + '\nformhe_definition_begin.\n' + instance64 + '\nformhe_definition_end.')
+
+        self.domain_predicates = OrderedSet()
         if self.config.domain_predicates:
             for pred in self.config.domain_predicates:
-                self.contents += f'\n#show {pred}.'
+                pred_name, pred_arity = pred.split('/')
+                self.domain_predicates.add((pred_name, int(pred_arity)))
+                for i, input in enumerate(self.inputs):
+                    self.inputs[i] = input + f'\n#show {pred}.'
 
-        def ast_callback(ast):
-            ast = self.constantCollector.visit(ast)
-            if ast is not None:
-                self.ast.append(ast)
-                if is_fact(ast):
-                    self.facts.append(ast)
-                elif is_rule(ast):
-                    self.rules.append(ast)
-                elif is_integrity_constraint(ast):
-                    self.integrity_constraints.append(ast)
-                else:
-                    self.others.append(ast)
+        constantCollector = Visitor()
 
-        def ast_instrumenter(ast):
-            instrumented_ast = self.instrumenter.visit(ast)
-            if instrumented_ast is not None:
-                self.instrumented_ast.append(instrumented_ast)
+        self.asts = []
+        self.instrumented_asts = []
+        try:
+            self.base_ast = utils.clingo.parse_string(self.raw_input)
+            self.base_ast = iterutils.drop_nones([constantCollector.visit(node) for node in self.base_ast])
+            for input in self.inputs:
+                ast = utils.clingo.parse_string(input)
+                self.constantCollector = Visitor(skips)  # TODO only the last instance counts
+                self.asts.append(iterutils.drop_nones([self.constantCollector.visit(copy.copy(node)) for node in ast]))
+                self.instrumenter = Instrumenter()
+                self.instrumented_asts.append(iterutils.drop_nones([self.instrumenter.visit(node) for node in ast]))
+        except Exception as e:
+            raise InstanceParseException()
+            # raise e
 
-        clingo.ast.parse_string(self.contents, ast_callback)
-        clingo.ast.parse_string(self.contents, ast_instrumenter)
-
-        if self.config.groundtruth:
+        if ground_truth_instance is not None:
+            self.ground_truth = ground_truth_instance
+            self.has_gt = True
+        elif self.config.groundtruth:
             self.ground_truth_file = Path(filename).resolve().parent / self.config.groundtruth
             self.ground_truth_file = self.ground_truth_file.resolve()
             config_tmp = copy.copy(self.config)
@@ -99,178 +121,123 @@ class Instance:
             self.has_gt = False
 
         self.constants = self.constantCollector.constants.items
-        self.cores = OrderedSet()
-        self.gt_cores = OrderedSet()
-        self.gt_unsat_models = OrderedSet()
-        self.answer_sets = OrderedSet()
-        self.answer_sets_asm: MultiArmedBandit[Sequence[Tuple[Symbol, bool]]] = MultiArmedBandit()
-        self.control = self.get_control()
+        self.definitions = self.constantCollector.definitions.items
+        self.cores = [OrderedSet() for i in range(len(self.asts))]
+        self.gt_cores = [OrderedSet() for i in range(len(self.asts))]
+        self.gt_unsat_models = [OrderedSet() for i in range(len(self.asts))]
+        self.models = [OrderedSet() for i in range(len(self.asts))]
+        self.controls = [self.get_control(i=i) for i in range(len(self.asts))]
 
-    def get_control(self, *args, max_sols=0, instrumented=False, clingo_args: list = None):
+    def get_control(self, *args, max_sols=0, i=0, instrumented=False, project=False, clingo_args: list = None):
         if clingo_args is None:
             clingo_args = []
+        if project:
+            clingo_args.append('--project')
         ctl = Control(clingo_args + [f'{max_sols}'], logger=lambda x, y: None)
         with clingo.ast.ProgramBuilder(ctl) as bld:
             if not instrumented:
-                for stm in self.ast:
+                for stm in self.asts[i]:
                     bld.add(stm)
             else:
-                for stm in self.instrumented_ast:
+                for stm in self.instrumented_asts[i]:
                     bld.add(stm)
+            if project:
+                for p in self.domain_predicates:
+                    clingo.ast.parse_string(f'#project {p[0]}/{p[1]}.', bld.add, logger=lambda x, y: None)
             for arg in args:
                 clingo.ast.parse_string(arg, bld.add, logger=lambda x, y: None)
-        perf.timer_start(perf.GROUNDING_TIME)
-        ctl.ground([('base', [])])
-        perf.timer_stop(perf.GROUNDING_TIME)
+        runhelper.timer_start('grounding.time')
+        try:
+            ctl.ground([('base', [])])
+        except:
+            runhelper.timer_stop('grounding.time')
+            raise InstanceGroundingException()
+        runhelper.timer_stop('grounding.time')
         return ctl
 
-    @lru_cache(config.get().model_cache_size)
-    def check_model(self, model: Iterable[Symbol]) -> bool:
-        res = self.control.solve(assumptions=[(x, True) for x in model])
-        if res.unsatisfiable:
-            perf.counter_inc(perf.UNIQUE_UNSAT)
-            return False
-        elif res.satisfiable:
-            perf.counter_inc(perf.UNIQUE_SAT)
-            return True
-        raise ValueError()
+    # @lru_cache(config.get().model_cache_size)
+    # def check_model(self, model: Iterable[Symbol], i=0) -> bool:
+    #     control = self.get_control(*[':- not ' + str(atom) + '.' for atom in model], i=i)
+    #     res = control.solve(assumptions=[(x, True) for x in model])
+    #     # control = self.controls[i]
+    #     # res = control.solve(assumptions=[(x, True) for x in model])
+    #     if res.unsatisfiable:
+    #         runhelper.tag_increment('unique.unsat')
+    #         return False
+    #     elif res.satisfiable:
+    #         runhelper.tag_increment('unique.sat')
+    #     else:
+    #         raise RuntimeError()
+    #     return True
 
-    def find_wrong_models(self, max_sols):
-        if not self.has_gt:
-            raise NoGroundTruthException()
+    @cached_property
+    def missing_models(self):
+        missing = []
+        for i in range(len(self.asts)):
+            self.compute_models(0, i)
+            self.ground_truth.compute_models(0, i)
+            missing.append(self.ground_truth.models[i] - self.models[i])
+        return missing
 
-        ctl = self.get_control(max_sols=max_sols)
+    @cached_property
+    def extra_models(self):
+        extra = []
+        for i in range(len(self.asts)):
+            self.compute_models(0, i)
+            self.ground_truth.compute_models(0, i)
+            extra.append(self.models[i] - self.ground_truth.models[i])
+        return extra
 
-        t = tqdm(total=max_sols, desc='Computing models')
-
-        with ctl.solve(yield_=True) as handle:
-            for m in handle:
-                t.update()
-
-                symbols = list(m.symbols(atoms=True))
-
-                gt_ctl = self.ground_truth.get_control(max_sols=1)
-
-                cores = []
-                gt_ctl.solve([(symbol, True) for symbol in symbols], on_core=lambda c: cores.append(c),
-                             on_model=lambda m: self.answer_sets.add(m.symbols(atoms=True)))
-
-                core = []
-
-                if len(cores) == 0:
-                    continue
-
-                for sym in gt_ctl.symbolic_atoms:
-                    if sym.literal in cores[-1]:
-                        core.append(sym.symbol)
-
-                self.cores.add(tuple(sorted(core)))
-
-        t.close()
-
-        self.test_gt_answer_sets(max_sols)
-
-    def test_gt_answer_sets(self, max_tests=None, wanted_cores=None, wanted_models=None):
-        if max_tests is None and wanted_cores is None and wanted_models is None:
-            raise ValueError()
-
-        if wanted_cores is not None or wanted_models is not None:
-            max_tests = 0
-
-        ctl = self.ground_truth.get_control(max_sols=max_tests)
-
-        cores_found = 0
-        models_found = 0
-
-        t = tqdm(total=max_tests if max_tests != 0 else None, desc='Testing gt answer sets')
-        with ctl.solve(yield_=True) as handle:
-            for m in handle:
-                t.update()
-
-                symbols = list(m.symbols(shown=True))
-
-                gt_ctl = self.get_control(max_sols=1)
-
-                def on_model(m: clingo.Model):
-                    nonlocal models_found
-                    models_found += 1
-                    self.answer_sets.add(m.symbols(atoms=True))
-
-                cores = []
-                gt_ctl.solve([(symbol, True) for symbol in symbols], on_core=lambda c: cores.append(c), on_model=on_model)
-
-                if wanted_models is not None and models_found >= wanted_models:
-                    return
-
-                core = []
-                unsat_model = []
-
-                if len(cores) == 0:
-                    continue
-
-                for sym in gt_ctl.symbolic_atoms:
-                    if sym.literal in cores[-1]:
-                        core.append(sym.symbol)
-
-                for sym in symbols:
-                    unsat_model.append(sym)
-
-                self.gt_cores.add(tuple(sorted(core)))
-                self.gt_unsat_models.add(tuple(sorted(unsat_model)))
-
-                cores_found += 1
-                if wanted_cores is not None and cores_found >= wanted_cores:
-                    return
-
-        t.close()
-
-    def generate_correct_models(self, max_sols):
-        if not self.has_gt:
-            raise NoGroundTruthException()
-
-        ctl = self.ground_truth.get_control(max_sols=max_sols)
-
-        t = tqdm(total=max_sols, desc='Computing models')
+    def compute_models(self, max_sols, i=0):
+        if self.config.optimization_problem:
+            ctl = self.get_control(max_sols=max_sols, i=i, project=True, clingo_args=['--opt-mode=optN'])
+        else:
+            ctl = self.get_control(max_sols=max_sols, i=i, project=True)
 
         def model_callback(m):
-            tmp = m.symbols(shown=True)
-            self.answer_sets.add(tuple(sorted([x for x in tmp])))
-            self.answer_sets_asm.add_bandit(frozenset((x, True) for x in tmp))
-            t.update()
+            if (not self.config.optimization_problem) or m.optimality_proven:
+                tmp = m.symbols(shown=True)
+                self.models[i].add(tuple(sorted([x for x in tmp])))
 
         ctl.solve(on_model=model_callback)
 
-        t.close()
-
-    def find_mcs(self):
-        instrumenter_vars = self.instrumenter.relaxation_functions
-        n_vars = len(instrumenter_vars)
-
-        generate_vars = '0 { ' + '; '.join(map(str, instrumenter_vars)) + ' } ' + str(n_vars) + '.'
-
-        clause_r = ''
-
-        if self.config.mcs_query:
-            negated_query = ' '.join([':- not ' + x + '.' for x in self.config.mcs_query.split('.') if x])
+    def mcs_negated_query(self, model, relaxed):
+        if not relaxed:
+            negated_query = ' '.join([':- not ' + str(x) + '.' for x in model if x])
         else:
-            self.test_gt_answer_sets(wanted_cores=1)
-            if not self.gt_unsat_models:
-                return
-            logger.info('No MCS query supplied. Using the following unsat model: %s', str(self.gt_unsat_models[0]))
-            negated_query = ' '.join([':- not ' + str(x) + '.' for x in self.gt_unsat_models[0] if x])
+            negated_query = ' '.join(['' + str(x) + '.' for x in model if x])
+        return negated_query
+
+    def mcs_query(self, model):
+        query = ':- ' + (', '.join([str(x) for x in model if x])) + '.'
+        return query
+
+    def all_mcs(self, model, relaxed=False, i=0, positive=False):
+        logger.info(f'Iterating all {"relaxed " if relaxed else ""}MCSs')
+
+        instrumenter_vars = self.instrumenter.relaxation_functions
+        generate_vars = '0 { ' + '; '.join(map(str, instrumenter_vars)) + ' } ' + str(len(instrumenter_vars)) + '.'
+        clause_r = ''
+        mcs_blocks = OrderedSet()
+        mcss = OrderedSet()
+
+        if positive:
+            negated_query = ' '.join([self.mcs_query(m) for m in model])
+        else:
+            negated_query = self.mcs_negated_query(model, relaxed)
 
         logger.info('Transformed query: %s', negated_query)
 
-        logger.info('Starting MCS iterations')
-        satisfied_vars = []
-        last_clause_r = ''
+        unsatisfied_vars = None
+        unsat = True
         while True:
-            ctl = self.get_control(generate_vars, clause_r, negated_query, max_sols=1, instrumented=True)
+            ctl = self.get_control(generate_vars, clause_r, negated_query, *mcs_blocks, max_sols=1, instrumented=True, i=i)
 
             with ctl.solve(yield_=True) as handle:
                 res = handle.get()
 
                 if res.satisfiable:
+                    unsat = False
                     m = handle.model()
                     unsatisfied_vars = []
                     satisfied_vars = []
@@ -281,30 +248,148 @@ class Instance:
                         else:
                             satisfied_vars.append(var)
 
-                    logger.debug(clause_r)
-                    logger.debug(m)
-                    logger.debug(' '.join(str(x) for x in satisfied_vars))
+                    unsatisfied_vars = frozenset(unsatisfied_vars)
+                    satisfied_vars = frozenset(satisfied_vars)
 
-                    last_clause_r = f'{len(satisfied_vars)} {{ {"; ".join(map(str, instrumenter_vars))} }} {n_vars}.'
-                    clause_r = f'{len(satisfied_vars) + 1} {{ {"; ".join(map(str, instrumenter_vars))} }} {n_vars}.'
+                    # print(clause_r if clause_r else generate_vars)
+                    # for mcs_block in mcs_blocks:
+                    #     print(mcs_block)
+                    # print('SAT')
+                    # print('satisfied:', list(map(str, satisfied_vars)))
+                    # print('unsatisfied:', list(map(str, unsatisfied_vars)))
+                    # print('\n\n\n')
+
+                    clause_r = f'{len(satisfied_vars) + 1} {{ {"; ".join(map(str, instrumenter_vars))} }} {len(instrumenter_vars)}.'
 
                 elif res.unsatisfiable:
-                    logger.info('MCS loop failed for %d vars', len(satisfied_vars) + 1)
-                    logger.info('Iterating MCSs of size %d ', n_vars - len(satisfied_vars))
-                    ctl = self.get_control(generate_vars, last_clause_r, negated_query, "#project _instrumenter/1.",
-                                           instrumented=True, clingo_args=['--project'])
-                    with ctl.solve(yield_=True) as handle:
-                        for m in handle:
-                            unsatisfied_vars = []
-                            for var in instrumenter_vars:
-                                if not m.contains(var):
-                                    unsatisfied_vars.append(var)
-                            logger.debug(' '.join(str(x) for x in unsatisfied_vars))
-                            yield [self.instrumenter.relaxations_function_map[var] for var in unsatisfied_vars]
-                    return
+                    # print(clause_r if clause_r else generate_vars)
+                    # for mcs_block in mcs_blocks:
+                    #     print(mcs_block)
+                    # print('UNSAT')
+                    # print('\n\n\n')
+
+                    if not unsat:
+                        if not any(map(lambda mcs: mcs.issubset(unsatisfied_vars), mcss)):
+                            yield frozenset(self.instrumenter.relaxations_function_map[var] for var in unsatisfied_vars)
+                            mcss.append(unsatisfied_vars)
+                            logger.info(' '.join(str(x) for x in unsatisfied_vars))
+                            clause_r = ''
+                            mcs_blocks.append(':- ' + ','.join(map(str, satisfied_vars)) + '.')
+                            unsat = True
+                        else:
+                            clause_r = ''
+                            mcs_blocks.append(':- ' + ','.join(map(str, satisfied_vars)) + '.')
+                            unsat = True
+                    else:
+                        return
 
                 else:
                     raise RuntimeError()
+
+    def all_min_mcs(self, model, relaxed=False, i=0, positive=False):
+        logger.info(f'Iterating all {"relaxed " if relaxed else ""}min MCSs')
+
+        instrumenter_vars = self.instrumenter.relaxation_functions
+        generate_vars = '0 { ' + '; '.join(map(str, instrumenter_vars)) + ' } ' + str(len(instrumenter_vars)) + '.'
+
+        if positive:
+            negated_query = ' '.join([self.mcs_query(m) for m in model])
+        else:
+            negated_query = self.mcs_negated_query(model, relaxed)
+
+        logger.info('Transformed query: %s', negated_query)
+
+        ctl = self.get_control(generate_vars, negated_query, '#maximize{ 1, I : _instrumenter(I) }.', "#project _instrumenter/1.", instrumented=True, clingo_args=['--project', '--opt-mode=optN'], i=i)
+        with ctl.solve(yield_=True) as handle:
+            for m in handle:
+                if m.optimality_proven:
+                    unsatisfied_vars = []
+                    for var in instrumenter_vars:
+                        if not m.contains(var):
+                            unsatisfied_vars.append(var)
+                    logger.info(' '.join(str(x) for x in unsatisfied_vars))
+                    yield frozenset(self.instrumenter.relaxations_function_map[var] for var in unsatisfied_vars)
+        return
+
+    @cached_property
+    def line_pairings(self):
+        from multiset import Multiset
+        from scipy.optimize import linear_sum_assignment
+        import numpy as np
+        from formhe.asp.synthesis.AspVisitor import AspVisitor, bag_nodes
+        from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
+
+        try:
+            reference_impl_lines = []
+            student_impl_lines = []
+            reference_impl_orig = []
+            student_impl_orig = []
+            reference_impl_nodes = []
+            student_impl_nodes = []
+
+            spec_generator = ASPSpecGenerator(self.ground_truth, 0, self.constantCollector.predicates.items())
+            trinity_spec = spec_generator.trinity_spec
+            asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars, True, domain_predicates=self.domain_predicates)
+            for rule in self.ground_truth.base_ast:
+                if rule.ast_type != clingo.ast.ASTType.Rule:
+                    continue
+                node = asp_visitor.visit(rule)
+                if isinstance(node, tuple):
+                    node = asp_visitor.builder.make_apply('stmt', [node[0] if node[0] else asp_visitor.builder.make_apply('empty', []), asp_visitor.builder.make_apply('and_', node[1])])
+                reference_impl_lines.append(bag_nodes(node))
+                reference_impl_orig.append(rule)
+                reference_impl_nodes.append(node)
+
+            spec_generator = ASPSpecGenerator(self, 0, self.constantCollector.predicates.items())
+            trinity_spec = spec_generator.trinity_spec
+            asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars, True, domain_predicates=self.domain_predicates)
+            for rule in self.base_ast:
+                if rule.ast_type != clingo.ast.ASTType.Rule:
+                    continue
+                node = asp_visitor.visit(rule)
+                if isinstance(node, tuple):
+                    node = asp_visitor.builder.make_apply('stmt', [node[0] if node[0] else asp_visitor.builder.make_apply('empty', []), asp_visitor.builder.make_apply('and_', node[1])])
+                student_impl_lines.append(bag_nodes(node))
+                student_impl_orig.append(rule)
+                student_impl_nodes.append(node)
+
+            if len(reference_impl_lines) < len(student_impl_lines):
+                n = len(student_impl_lines) - len(reference_impl_lines)
+                reference_impl_lines += [Multiset(['empty']) for i in range(n)]
+                reference_impl_orig += [None for i in range(n)]
+                reference_impl_nodes += [asp_visitor.builder.make_apply('empty', []) for i in range(n)]
+            if len(student_impl_lines) < len(reference_impl_lines):
+                n = len(reference_impl_lines) - len(student_impl_lines)
+                student_impl_lines += [Multiset(['empty']) for i in range(n)]
+                student_impl_orig += [None for i in range(n)]
+                student_impl_nodes += [asp_visitor.builder.make_apply('empty', []) for i in range(n)]
+
+            costs = np.zeros((len(reference_impl_lines), len(student_impl_lines)))
+            for (i, a), (j, b) in product(enumerate(reference_impl_lines), enumerate(student_impl_lines)):
+                # costs[i, j] = len(a.symmetric_difference(b)) / (len(a) + len(b)) if len(a) + len(b) != 0 else 0
+                costs[i, j] = len(a.symmetric_difference(b))
+
+            row_ind, col_ind = linear_sum_assignment(costs)
+
+            logger.debug('Printing line pairings followed by pairing cost')
+            pairings_with_cost = []
+            for a, b in zip(row_ind, col_ind):
+                logger.debug(reference_impl_orig[a])
+                logger.debug(reference_impl_nodes[a])
+                logger.debug(reference_impl_lines[a])
+                logger.debug(student_impl_orig[b])
+                logger.debug(student_impl_nodes[b])
+                logger.debug(student_impl_lines[b])
+                logger.debug(costs[a, b])
+                pairings_with_cost.append((a, b, costs[a, b]))
+
+            runhelper.log_any('pairings', pairings_with_cost)
+
+            return pairings_with_cost
+        except Exception as e:
+            print(e)
+            logger.error('Exception while trying to compute line pairings')
+            return None
 
     def print_answer_sets(self):
         for a in sorted(self.answer_sets, key=len):

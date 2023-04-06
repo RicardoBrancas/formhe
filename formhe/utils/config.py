@@ -16,34 +16,48 @@ class Config:
     input_file: str = field(metadata={'args': ['input_file']})
     groundtruth: str = field(metadata={'args': ['--ground-truth']}, default=None)
     mcs_query: str = field(metadata={'args': ['--query']}, default=None)
-    domain_predicates: list = field(metadata=dict(nargs='+', type=str), default=None)
+    domain_predicates: list = field(metadata=dict(nargs='*', type=str), default=None)
+    optimization_problem: bool = False
 
     # core
     seed: Any = 42
     logging_level: str = 'DEBUG'
     eval_params: str = field(metadata=dict(required=False, type=lambda x: base64.b64decode(x.encode('utf-8')).decode('utf-8')), default='')
+    instance_base64: list[str] = field(metadata=dict(required=False, nargs='+', type=lambda s: base64.b64decode(s.encode('utf-8')).decode('utf-8')), default='')
     no_enumerator_debug: bool = False
+    no_stdin_instance: bool = False
+    exit_after_fault_localization: bool = False
 
     # predicates
     disable_commutative_predicate: bool = False
+    disable_distinct_args_predicate: bool = False
 
     # optimizations
-    allow_constant_expressions: bool = False
+    block_constant_expressions: bool = False
     allow_unsafe_vars: bool = False
-    no_bind_free_semantic_vars: bool = False
-    no_semantic_constraints: bool = False
 
     # parameters
     minimum_depth: int = 2
     maximum_depth: int = 5
-    n_gt_sols_generated: int = 200
-    n_gt_sols_checked: int = 5
-    n_candidate_sols_checked: int = 5
-    model_cache_size: int = 512
     bandit_starting_epsilon: float = 1
     bandit_epsilon_multiplier: float = 0.9999
     bandit_exploration_count: int = 5000
-    limit_enumerated_atoms: int = None
+    extra_vars: int = 2
+    skip_mcs_negative_non_relaxed: bool = False
+    skip_mcs_negative_relaxed: bool = False
+    use_mcs_positive: bool = False
+    skip_mcs_line_pairings: bool = False
+    enable_arithmetic: bool = False
+    disable_classical_negation: bool = False
+    use_sbfl: bool = False
+
+    # heuristics
+
+    # evaluation
+    selfeval_lines: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
+    simulate_fault_localization: bool = False
+    selfeval_fix_test: bool = False
+    selfeval_fix: str = None
 
 
 parser = ArgumentParser(Config, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -52,16 +66,19 @@ _config: Config = parser.parse_args()
 logging.basicConfig(level=_config.logging_level, format='%(relativeCreated)8d | %(levelname)s | %(name)s | %(message)s')
 logger = logging.getLogger('formhe')
 
-fd = sys.stdin.fileno()
-fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+if not _config.no_stdin_instance:
+    fd = sys.stdin.fileno()
+    fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
-try:
-    lines = sys.stdin.readlines()
-    lines.insert(0, 'formhe_definition_begin.')
-    lines.append('formhe_definition_end.')
-    stdin_content = lines
-except:
+    try:
+        lines = sys.stdin.readlines()
+        lines.insert(0, 'formhe_definition_begin.')
+        lines.append('formhe_definition_end.')
+        stdin_content = lines
+    except:
+        stdin_content = []
+else:
     stdin_content = []
 
 
@@ -73,3 +90,18 @@ def store(conf: Config):
 def get() -> Config:
     global _config
     return _config
+
+
+def strtobool(val):
+    """Convert a string representation of truth to true (1) or false (0).
+    True values are 'y', 'yes', 't', 'true', 'on', and '1'; false values
+    are 'n', 'no', 'f', 'false', 'off', and '0'.  Raises ValueError if
+    'val' is anything else.
+    """
+    val = val.lower()
+    if val in ('y', 'yes', 't', 'true', 'on', '1'):
+        return True
+    elif val in ('n', 'no', 'f', 'false', 'off', '0'):
+        return False
+    else:
+        raise ValueError("invalid truth value %r" % (val,))

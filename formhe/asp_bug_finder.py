@@ -2,6 +2,7 @@
 
 import logging
 
+from formhe.exceptions.parser_exceptions import InstanceParseException, InstanceGroundingException
 from ordered_set import OrderedSet
 
 from formhe.asp.instance import Instance
@@ -15,17 +16,31 @@ def main():
     logger.info('%s', config.get())
 
     logger.info('Loading instance from %s', config.get().input_file)
-    instance = Instance(config.get().input_file)
+    try:
+        instance = Instance(config.get().input_file)
+    except InstanceParseException:
+        print("Error while parsing input file.")
+        exit(-1)
+    except InstanceGroundingException:
+        print("Error while grounding.")
+        exit(-1)
 
     logger.debug('Instrumented program:\n%s', '\n'.join(str(x) for x in instance.instrumented_ast))
 
     unsats_union = OrderedSet()
 
     perf.timer_start(perf.FAULT_LOCALIZATION_TIME)
-    for unsat in instance.find_mcs():
+    for unsat in instance.all_mcs():
         for var in unsat:
             unsats_union.add(var)
     perf.timer_stop(perf.FAULT_LOCALIZATION_TIME)
+
+    if not unsats_union:
+        perf.timer_start(perf.FAULT_LOCALIZATION_TIME)
+        for unsat in instance.all_mcs(relaxed=True):
+            for var in unsat:
+                unsats_union.add(var)
+        perf.timer_stop(perf.FAULT_LOCALIZATION_TIME)
 
     if unsats_union:
         instance = Instance(config.get().input_file, skips=unsats_union)

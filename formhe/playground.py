@@ -1,31 +1,15 @@
-import signal
-import time
+import itertools
 
-from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
-from formhe.asp.instance import Instance
-from formhe.trinity.z3_enumerator import Z3Enumerator
+from utils.iterutils import toggleset_add_one_to_base
 
-instance = Instance('generated_instances/nqueens/0.lp')
+preset_statements = [('head1', ['body1a', 'body1b']), (None, ['body2a', 'body2b'])]
 
-spec_generator = ASPSpecGenerator(instance, 2)
-trinity_spec = spec_generator.trinity_spec
+stmt_combos = []
+for head, body in preset_statements:
+    if head is None:
+        stmt_combos.append([(False, None, body_combo) for body_combo in toggleset_add_one_to_base(body)])
+    else:
+        stmt_combos.append([(True, head_combo, body_combo) for body_combo in toggleset_add_one_to_base(body) for head_combo in [head, None]])
 
-signal.signal(signal.SIGINT, signal.default_int_handler)
-
-x = 0
-start = time.time()
-for i in range(2, 4):
-    enumerator = Z3Enumerator(trinity_spec, i)
-    while prog := enumerator.next():
-        x += 1
-        print(prog)
-        enumerator.update()
-        if x == 2000:
-            break
-    if x == 2000:
-        break
-
-print(x)
-elapsed = time.time() - start
-print('Took', elapsed)
-print(x / elapsed, 'enums/s')
+for combo in itertools.product(*stmt_combos):
+    print(combo)

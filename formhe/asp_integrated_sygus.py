@@ -66,7 +66,7 @@ def main():
 
     unsats_union = OrderedSet()
 
-    for unsat in islice(instance.find_mcs(query), 100):
+    for unsat in islice(instance.all_mcs(query), 100):
         for var in unsat:
             unsats_union.add(var)
 

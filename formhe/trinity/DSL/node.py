@@ -254,8 +254,15 @@ class ApplyNode(Node):
                 'Cannot construct an AST internal node from a non-function production')
         for index, (decl_ty, node) in enumerate(zip(prod.rhs, args)):
             actual_ty = node.type
-            if decl_ty.name != 'Any' and decl_ty != actual_ty:
-                msg = f'Argument {index} type mismatch on {prod}: expected {decl_ty} but found {actual_ty}'
+            if not isinstance(decl_ty, tuple):
+                decl_ty = (decl_ty,)
+            found_match = False
+            for decl_ty_elem in decl_ty:
+                if decl_ty_elem.name == 'Any' or decl_ty_elem == actual_ty:
+                    found_match = True
+                    break
+            if not found_match:
+                msg = f'Argument {index} type mismatch on {prod}: expected one of {decl_ty} but found {actual_ty}'
                 raise ValueError(msg)
         self._args = args
 

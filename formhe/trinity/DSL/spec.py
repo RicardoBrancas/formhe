@@ -157,7 +157,7 @@ class ProductionSpec:
             raise KeyError(
                 'The given type is not a enum type: {}'.format(ty))
         for prod in self.get_productions_with_lhs(ty):
-            if prod.rhs[0] == value:
+            if len(prod.rhs) > 0 and prod.rhs[0] == value:
                 return prod
         raise KeyError(
             'Value "{}" is not in the domain of type {}'.format(value, ty))

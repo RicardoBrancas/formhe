@@ -1,6 +1,0 @@
-1{set(V,a): vertex(V); set(V,b) :vertex(V)}1.
-%1{set(V,a); set(V,b)}1 :- vertex(V).
-
-:- edge(V1,V2), set(V1,G), set(V2,G).
-
-#show set/2.

@@ -129,9 +129,9 @@ class FunctionProduction(Production):
             constraints = []
         if not isinstance(lhs, ValueType) and not isinstance(lhs, EnumType):
             raise ValueError('LHS of FunctionProduction must be a leaf type')
-        if len(rhs) == 0:
-            raise ValueError(
-                'Cannot construct a FunctionProduction with empty RHS')
+        # if len(rhs) == 0:
+        #     raise ValueError(
+        #         'Cannot construct a FunctionProduction with empty RHS')
         for constraint in constraints:
             if constraint.type is not ExprType.BOOL:
                 raise ValueError(

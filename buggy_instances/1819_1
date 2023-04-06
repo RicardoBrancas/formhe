@@ -1,7 +1,0 @@
-node(V) :- e(V,_).
-%node(V) :- e(_,V).
-
-k{sel(V):node(V)}k.
-
-:- e(V,_), not sel(V).
-%:- e(_,V), not sel(V).

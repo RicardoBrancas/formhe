@@ -1,78 +1,64 @@
+import logging
+import re
 from typing import Any
+
+import runhelper
 
 from formhe.asp.instance import Instance
 from formhe.trinity.Visitor import PostOrderInterpreter
 from formhe.utils import config, perf
 
+logger = logging.getLogger('formhe.asp.interpreter')
+
 
 class AspInterpreter(PostOrderInterpreter):
 
-    def __init__(self, instance: Instance):
+    def __init__(self, instance: Instance, predicates: list = None):
         self.instance = instance
         self.part_counter = 0
+        if predicates is None:
+            self.predicates = self.instance.constantCollector.predicates.keys()
+        else:
+            self.predicates = predicates
 
     def __getattribute__(self, name: str) -> Any:
         try:
             return super().__getattribute__(name)
         except AttributeError as e:
-            for pred_name in self.instance.constantCollector.predicates.keys():
-                if name == f'eval_{pred_name}':
-                    def tmp(node, args):
-                        return self.eval_predicate(node, args, pred_name)
+            pred_name = name.removeprefix('eval_')
+            if match := re.fullmatch(r'([a-zA-Z_0-9]+)/\d+', pred_name):
+                def tmp(node, args):
+                    return self.eval_predicate(node, args, match.group(1))
 
-                    return tmp
-            raise e
+                return tmp
+
+            else:
+                raise NotImplementedError(f'Unknown function {pred_name}!')
 
     def test(self, prog):
-        current_part = self.part_counter
-        self.part_counter += 1
-        # statement = f'#external program_part_activator_{current_part}.\n:- ' + prog + f', program_part_activator_{current_part}.'
-        # perf.timer_start(perf.GROUNDING_TIME)
-        control = self.instance.get_control(':- ' + prog + '.')
-        # control.add(f'program_part_{current_part}', [], statement)
-        # control.ground([(f'program_part_{current_part}', [])])
-        # control.assign_external(Function(f'program_part_activator_{current_part}', []), True)
-        # perf.timer_stop(perf.GROUNDING_TIME)
+        for control_i in range(len(self.instance.asts)):
+            control = self.instance.get_control(prog, project=True, clingo_args=['--opt-mode=optN'] if self.instance.config.optimization_problem else [], i=control_i)
+            runhelper.timer_start('interpreter.test.time')
+            at_least_one = False
+            with control.solve(yield_=True) as handle:
+                for m in handle:
+                    if self.instance.config.optimization_problem and not m.optimality_proven:
+                        continue
 
-        perf.timer_start(perf.TMP_TIME)
-        for i, m in enumerate(self.instance.answer_sets_asm.get_bandits(config.get().n_gt_sols_checked)):
-            res = control.solve(assumptions=m)
-            if res.unsatisfiable:
-                self.instance.answer_sets_asm.update_bandit(m, 1)
-                perf.update_counter(perf.CANDIDATE_CHECKS_COUNTER, i + 1)
-                perf.timer_stop(perf.TMP_TIME)
+                    model = tuple(sorted((m.symbols(shown=True))))
+                    if model not in self.instance.ground_truth.models[control_i]:
+                        runhelper.tag_increment('interpreter.test.early.exit')
+                        runhelper.timer_stop('interpreter.test.time')
+                        return False
+
+                    at_least_one = True
+
+            if not at_least_one:
+                runhelper.tag_increment('interpreter.test.empty.exit')
+                runhelper.timer_stop('interpreter.test.time')
                 return False
-        perf.timer_stop(perf.TMP_TIME)
-        perf.update_counter(perf.CANDIDATE_CHECKS_COUNTER, 'inf')
 
-        perf.timer_start(perf.TMP_TIME2)
-        with control.solve(yield_=True) as handle:
-            i = 0
-            for m in handle:
-                i += 1
-                m_ord = frozenset(m.symbols(atoms=True))
-                if not self.instance.ground_truth.check_model(m_ord):
-                    perf.counter_inc(perf.UNSAT)
-                    perf.update_counter(perf.GT_CHECKS_COUNTER, i)
-                    perf.timer_stop(perf.TMP_TIME2)
-                    return False
-                perf.counter_inc(perf.SAT)
-                if i >= config.get().n_candidate_sols_checked:
-                    break
-        perf.timer_stop(perf.TMP_TIME2)
-        perf.update_counter(perf.GT_CHECKS_COUNTER, 'inf')
-
-        # perf.timer_start(perf.TMP_TIME)
-        # for i, m in enumerate(self.instance.answer_sets_asm.get_bandits(config.get().n_gt_sols_checked - 1, 1)):
-        #     res = control.solve(assumptions=m)
-        #     if res.unsatisfiable:
-        #         self.instance.answer_sets_asm.update_bandit(m, 1)
-        #         perf.update_counter(perf.CANDIDATE_CHECKS_COUNTER, i + 1 + 1)
-        #         perf.timer_stop(perf.TMP_TIME)
-        #         return False
-        # perf.timer_stop(perf.TMP_TIME)
-        # perf.update_counter(perf.CANDIDATE_CHECKS_COUNTER, 'inf')
-
+            runhelper.timer_stop('interpreter.test.time')
         return True
 
     def eval_predicate(self, node, args, name):
@@ -80,6 +66,15 @@ class AspInterpreter(PostOrderInterpreter):
 
     def eval_and(self, node, args):
         return ', '.join(args)
+
+    def eval_and_(self, node, args):
+        return ', '.join(args)
+
+    def eval_pool(self, node, args):
+        return '; '.join(args)
+
+    def eval_stmt_and(self, node, args):
+        return ' '.join(args)
 
     def eval_eq(self, node, args):
         return args[0] + ' == ' + args[1]
@@ -109,10 +104,31 @@ class AspInterpreter(PostOrderInterpreter):
         return f'-{args[0]}'
 
     def eval_or(self, node, args):
-        return ' || '.join(args)
+        return ' | '.join(args)
 
     def eval_tuple(self, node, args):
         return '(' + ', '.join(args) + ')'
+
+    def eval_stmt(self, node, args):
+        if args[1]:
+            return args[0] + ' :- ' + args[1] + '.'
+        else:
+            return args[0] + '.'
+
+    def eval_minimize(self, node, args):
+        return ':~ ' + args[3] + '. [' + args[0] + '@' + args[2] + ']'
+
+    def eval_aggregate(self, node, args):
+        return args[0] + ' { ' + args[1] + ' : ' + args[2] + ' } ' + args[3]
+
+    def eval_aggregate_pool(self, node, args):
+        return args[0] + ' { ' + args[1] + ' } ' + args[2]
+
+    def eval_interval(self, node, args):
+        return f'({args[0]}..{args[1]})'
+
+    def eval_empty(self, node, args):
+        return ''
 
     def eval_PBool(self, value):
         if value:
@@ -120,5 +136,8 @@ class AspInterpreter(PostOrderInterpreter):
         else:
             return '#false'
 
-    def eval_Int(self, value):
+    def eval_Terminal(self, value):
         return str(value)
+
+    def eval_BodyAggregateFunc(self, value):
+        return value
