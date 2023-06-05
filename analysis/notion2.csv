@@ -1,0 +1,127 @@
+﻿instance,OK?,Wrong Lines,Correction,lines.missing,lines.wrong,literals.missing,literals.wrong,grade.missing,grade.wrong,Synthesizable?,Pairing useful?,Fault identified?,Highlighter useful?,Comments,Extra Features,Depth
+A_1_1,No,,"{ assign(A,1..k) } = 1 :- e(_,A).",1,0,2,0,Yes,,"Non-solution Found, Very Likely",No - solution too different,Yes (there are no buggy statements),No wrong parts,,"Intervals, Intervals in aggregate",N/A
+A_3_1,No,"1{assign(X;Y,1..k)}1 :- e(X,Y).","2{assign((X;Y),1..k)}2 :- e(X,Y).",0,1,0,2,,Good,Likely,Unsupported,Partial,3/5,"Fault localization returns no bugs because the assign predicate used in the student solution is assign/1 and not assign/2. The program can technically be corrected without removing the incorrect line.
+Other solutions are possible with less additions to the DSL at the cost of longer solutions. “2” constant would need to be obtained via 1+1","Intervals, Intervals in aggregate, Pooling",N/A
+A_4_1,No,,"node(I0) :- e(_, I0).
+node(I0) :- e(I0, _).",2,0,4,0,Yes (end),,Already Works,4/5,Yes (there are no buggy statements),No wrong parts,,,2
+A_4_2,No,,"node(I0) :- e(_, I0).
+node(I0) :- e(I0, _).
+:- e(X,Y), assign(X,C), assign(Y,C).",3,0,7,0,No,,Maybe,4/5,Yes (there are no buggy statements),No wrong parts,"Needs 3 statements, one of them with several atoms",,2
+A_4_3,No,,"v(N) :- e(_, N).
+v(N) :- e(N, _).
+assign(X, I) :- color(X, I).",3,0,6,0,No,,Maybe,3/5,Yes (there are no buggy statements),No wrong parts,"As an alternative, we could have a way for renaming predicates without resynthesizing the whole program.",Extra Predicate,2
+A_4_4,No,"1 <= { assign(X,I): c(I) } <= 1 :- node(X).
+:- assign(X,I), assign(Y,I), node(X,Y), color(I).","node(I0) :- e(_, I0).
+node(I0) :- e(I0, _).
+1 <= { assign(X,I): color(I) } <= 1 :- node(X).
+:- assign(X,I), assign(Y,I), e(X,Y), color(I).",2,2,4,6,Yes,Bad,Unlikely,4/5,Partial,1/5,,,3
+A_4_5,No,":- assign(X,I), assign(Y,I), edge(X,Y), color(I).","node(I0) :- e(_, I0).
+node(I0) :- e(I0, _).
+:- assign(X,I), assign(Y,I), e(X,Y), color(I).",2,1,4,4,Yes,Bad,Likely,,Partial,,,,2
+A_4_6,No,":- edge(X,Y), assign(X,C), assign(Y,C).","node(I0) :- e(_, I0).
+node(I0) :- e(I0, _).
+:- e(X,Y), assign(X,C), assign(Y,C).",2,1,4,3,Yes,Good,Likely,,Partial,,,,2
+A_4_7,No,"c(1..n).
+v(1..n).","c(1..k).
+v(N) :- e(_, N).
+v(N) :- e(N, _).
+assign(X, I) :- color(X, I).",2,2,4,3,Yes,Not in sketch?,Unlikely,,Partial,,"As an alternative, we could have a way for renaming predicates without resynthesizing the whole program.",Delete Statement,3
+A_6_2,No,"assign(N,C) :- node(N), color(C).","1 { assign(N,C) : color(C) } 1 :- node(N).",0,1,0,3,,Good,Very Likely,,Not the first MCS,,The buggy line is a generate statement but the fault localizers indicates the test statement that uses the generated predicate instead,,3
+A_6_3,No,"1 { assign(N,C) } 1 :- node(N), color(C).","1 { assign(N,C) : color(C) } 1 :- node(N).",0,1,0,3,,Not in sketch?,Very Likely,,Not the first MCS,,Same as above,,3
+A_8_1,No,k(1..n).,k(1..k).,0,1,0,1,,Good,Very Likely,,Partial,,Wrong constant,Intervals,3
+A_8_2,No,,k(1..k).,1,0,1,0,Yes,,Very Likely,,No (there are no buggy statements),,,Intervals,3
+A_8_3,No,,k(1..k).,1,0,1,0,Yes,,Very Likely,,No (there are no buggy statements),,,Intervals,3
+A_8_4,No,k(1..n).,k(1..k).,0,1,0,1,,Good,Very Likely,,No/Partial,,Wrong constant,Intervals,3
+B_8_1,No,"n {sel(SET): e(SET, _)} n .","k { sel(I0) : e(I0, _) } k.",0,1,0,1,,Good,Already Works,,Yes,,Wrong constant used,,3
+C_1_1,No,"sel(A) :- e(Y,A).
+sel(B) :- e(Y,B), -e(Y,A).","k {sel(A) : e(Y,A)} k.
+cov(X) :- e(X, S), sel(S).
+:- not cov(X), e(X, _).",1,2,2,5,No,Not in sketch?,Very Unlikely,,No,,Whole program is wrong and needs to be replaced,,3
+C_1_2,No,"sel(A) :- e(Y,A), -e(Y,B).
+sel(A) :- e(Y,A), e(Y,B), not sel(B).","k {sel(A) : e(Y,A)} k.
+cov(X) :- e(X, S), sel(S).
+:- not cov(X), e(X, _).",1,2,2,7,No,Not in sketch?,"Non-solution Found, Very Unlikely",,Partial,,"Even though we only identify one of the lines as incorrect, the other line will never activate and the program can technically be corrected with it present.
+Whole program needs to be synthesized",,3
+C_1_4,No,"sel(A) :- e(Y,A), e(Y,B), not sel(B).","k {sel(A) : e(Y,A)} k.
+cov(X) :- e(X, S), sel(S).
+:- not cov(X), e(X, _).",2,1,3,4,No,Not in sketch?,"Non-solution Found, Very Unlikely",,Yes,,Whole program needs to be synthesized,,3
+C_1_5,No,"sel(A) :- e(Y,A), -e(Y,B).","cov(X) :- e(X, S), sel(S).
+:- not cov(X), e(X, _).",1,1,2,3,No,Terrible,Unlikely,,Partial,,"Although the statement is incorrect, it never activates and so the program can be corrected without removing it",,2
+D_1_1,No,"sel(A) :- e(A,B), e(B,A).
+k {sel(A) : e(A,B)} k.",":- not sel(X), not sel(Y), e(X,Y).
+0 {sel(A;B) : e(A,B)} k.",0,2,0,4,,Not in sketch?,Unlikely,,Partial,,"Only one of the two statements is selected by the fault localizer
+Instead of using a disjunction, it’s also possible to solve this by using an extra predicate and two extra statements",Disjunction inside predicate,3
+D_1_2,No,"{sel(A); sel(B)} :- e(A,B).
+k {sel(A) : e(B,A)} k.","1 {sel(A); sel(B)} :- e(A,B).
+0 {sel(A;B) : e(A,B)} k.",0,2,0,3,,Good,Maybe,,No,,,Disjunction inside predicate,3
+D_1_3,No,"sel(A) :- e(A,B).
+sel(A) :- e(B,A).
+k {sel(A)} k :- e(B,A).
+k {sel(A)} k :- e(B,A).",":- not sel(X), not sel(Y), e(X,Y).
+0 {sel(A;B) : e(B,A)} k.",-2,3,-3,3,No,Not in sketch?,Very Unlikely,,Subset,,Only half the statements are identified as incorrect,"Disjunction inside predicate, No conditional inside aggregate",3
+D_1_4,No,"sel(A) :- e(A,B).
+sel(A) :- e(B,A).
+k {sel(A)} k :- e(B,A).
+k {sel(A)} k :- e(A,B).",":- not sel(X), not sel(Y), e(X,Y).
+0 {sel(A;B) : e(B,A)} k.",-2,2,-3,4,No,Not in sketch?,Very Unlikely,,Subset,,Only half the statements are identified as incorrect,"Disjunction inside predicate, No conditional inside aggregate",3
+D_1_5,No,"sel(A) :- e(A,B).
+sel(A) :- e(B,A).
+{sel(A)} = k :- e(B,A).",":- not sel(X), not sel(Y), e(X,Y).
+0 {sel(A;B) : e(B,A)} k.",-1,2,-2,4,No,Not in sketch?,Very Unlikely,,Subset,,Only one of the statements is identified as incorrect,"Disjunction inside predicate, No conditional inside aggregate",3
+D_1_6,No,"sel(A) :- e(A,B).
+sel(A) :- e(B,A).
+{sel()} = k.",":- not sel(X), not sel(Y), e(X,Y).
+0 {sel(A;B) : e(B,A)} k.",-1,2,-2,3,No,Not in sketch?,Very Unlikely,,Subset,,Only one of the statements is identified as incorrect,"Disjunction inside predicate, No conditional inside aggregate",3
+D_1_7,No,k{sel(A): aux(A)}k.,0{sel(A): aux(A)}k.,0,1,0,1,,Good,Very Likely,5/5,No,,,,3
+D_2_1,No,k{sel(X): vertex(X)}k.,0{sel(X): vertex(X)}k.,0,1,0,1,,Good,Very Likely,5/5,No,,,,3
+D_4_1,No,"1 { sel(X) : e(X, _) } k .
+1 { sel(X) : e(_, X) } k .
+:- sel(X1), sel(X2), e(X1, _), e(X2, _), X1 != X2 .","0 {sel(X;Y) : e(X, Y)} k.
+:- not sel(X1), not sel(X2), e(X1, X2).",-1,2,-1,6,No,Not in sketch?,Unlikely,,Subset,,Only one of the statements is identified as incorrect,Disjunction inside predicate,3
+D_4_2,No,"limit(2).
+sel(X) :- e(X, Y), not sel(Y) .
+solve :- limit(C), #count{ vertex(X) : sel(X) } <= C .
+:- not solve .","{ sel(X;Y) : e(X,Y) } k.
+:- not sel(X), not sel(Y), e(X,Y).",-2,2,-2,6,No,Not in sketch?,Very Unlikely,,No,,Could not find a way to correct the submitted program with few changes,,3
+D_4_3,No,"sel(X) :- e(X, Y), not sel(Y) .
+solve :- limit(C), #count{ vertex(X) : sel(X) } <= C .
+:- not solve .","{ sel(X;Y) : e(X,Y) } k.
+:- not sel(X), not sel(Y), e(X,Y).",-1,2,-1,6,No,Not in sketch?,Very Unlikely,,No,,Could not find a way to correct the submitted program with few changes,Disjunction inside predicate,3
+D_4_5,No,"limit(k) .
+sel(X) :- e(X, Y), not sel(Y) .
+solve :- limit(C), #count{ vertex(X) : sel(X) } <= C .
+:- not solve .","{ sel(X;Y) : e(X,Y) } k.
+:- not sel(X), not sel(Y), e(X,Y).",-2,2,-2,6,No,Not in sketch?,Very Unlikely,,No,,Could not find a way to correct the submitted program with few changes,Disjunction inside predicate,3
+D_5_1,No,k{sel(X): v(X)}k.,0{sel(X): v(X)}k.,0,1,0,1,,Good,Very Likely,5/5,No,,,,3
+D_7_1,No,k{sel(X) : vertex(X)}k.,0{sel(X) : vertex(X)}k.,0,1,0,1,,Good,Very Likely,5/5,No,,,,3
+D_8_1,No,{ sel(V): v(V)} n.,0 { sel(I0) : v(I0) } k.,0,1,0,1,,Good,Look Into,,Partial,,"The buggy statement is not identified but the program can technically be corrected without it.
+The correction was enumerated but rejected by the verifier. Need to look into what happened",,3
+D_8_2,No,,"v(I0) :- e(I0, _).
+v(I0) :- e(_, I0).",2,0,4,0,Yes,,"Already Works, Partial Solution",,Yes (there are no buggy statements),,The correction was enumerated but rejected by the verifier. Need to look into what happened,,2
+E_1_1,No,":- edge(A,B), set(A, a), set(B, b).
+:- edge(A,B), set(A, b), set(B, a).",":- edge(A,B), set(A, a), set(B, a).
+:- edge(A,B), set(A, b), set(B, b).",0,2,0,6,,Bad,Timeout,,Yes,,Fix is trivial and should be supported already. Need to look into what is happening,,2
+E_4_1,No,"{ set(V, G): g(G) } 1 :- e(V, _) .
+{ set(V, G): g(G) } 1 :- e(_, V) .
+:- e(V1, V2), set(V1, G1), set(V2, G2), G1 != G2 .","1 { set(V, G): g(G) } 1 :- edge(V, _) .
+1 { set(V, G): g(G) } 1 :- edge(_, V) .
+:- edge(V1, V2), set(V1, G1), set(V2, G2), G1 == G2 .",0,3,0,8,,Terrible,"Already Works, Partial Solution",,No,,Wrong predicate name used,,3
+E_4_2,No,"{ set(V, G): g(G) } :- e(V, _) .
+{ set(V, G): g(G) } :- e(_, V) .
+:- e(V1, V2), set(V1, G1), set(V2, G2), G1 != G2 .","1 { set(V, G): g(G) } 1 :- edge(V, _) .
+1 { set(V, G): g(G) } 1 :- edge(_, V) .
+:- edge(V1, V2), set(V1, G1), set(V2, G2), G1 == G2 .",0,3,0,8,,Terrible,"Already Works, Partial Solution",,No,,Wrong predicate name used,,3
+E_4_3,No,"{ set(V, g(G)): g(G) } 1 :- e(V, _) .
+{ set(V, g(G)): g(G) } 1 :- e(_, V) .","1 { set(V, G): g(G) } 1 :- e(V, _) .
+1 { set(V, G): g(G) } 1 :- e(_, V) .
+e(A,B) :- edge(A,B).",1,2,2,4,Yes,Medium,Very Likely,,No,,Not sure what the behavior of the original program is,,3
+E_6_1,No,"set(NODE, GROUP) :- vertex(NODE), group(GROUP).","1 { set(NODE, GROUP) : group(GROUP) } 1 :- vertex(NODE).",0,1,0,3,,Not in sketch?,Very Likely,,Not the first MCS,,,,3
+F_1_1,No,"scc(A),scc(B) :- link(A,B), link(B,A), A!=B.","{ scc(X) } :- vertex(X).
+link(A, B) :- edge(A, B).
+link(A, A) :- vertex(A).
+:- scc(R1), scc(R2), not link(R1, R2).
+#maximize { 1,R  : scc(R),vertex(R) } .",,,,,,,"Non-solution Found, Very Unlikely",,No,,,,
+F_1_2,No,,,,,,,,,,,,,,,
+F_2_1,No,,,,,,,,,,,,,,,
+F_5_1,No,,,,,,,,,,,,,,,
+F_8_1,No,,,,,,,,,,,,,,,

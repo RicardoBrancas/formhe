@@ -11,6 +11,7 @@ library(ggthemes)
 library(elementalist)
 
 notion <- read_csv('analysis/notion.csv') %>% mutate(instance = paste0('mooshak/', instance))
+notion2 <- read_csv('analysis/notion2.csv') %>% mutate(instance = paste0('mooshak/', instance))
 
 read_data <- function(name) {
   data <- read_csv(paste0('analysis/data/', name, '.csv')) %>%
@@ -27,54 +28,63 @@ read_data <- function(name) {
   data %>% left_join(notion, by = 'instance')
 }
 
-r068 <- read_data('068')  # default
-r070 <- read_data('070')  # new default
-r091 <- read_data('091')  # new default 2 combined depth
-r071 <- read_data('071')  # simulated
-r083 <- read_data('083')  # simulated 2
-r086 <- read_data('086')  # simulated 3
-r093 <- read_data('093')  # simulated 3 combined depth
-r087 <- read_data('087')  # simulated 3 reduced DSL
-r094 <- read_data('094')  # simulated 3 combined depth reduced DSL
-r072 <- read_data('072')  # no pruning
-r073 <- read_data('073')  # no classical negation
-r074 <- read_data('074')  # only one extra var
-r075 <- read_data('075')  # skip negative non relaxed
-r076 <- read_data('076')  # skip negative relaxed
-r077 <- read_data('077')  # skip line pairings
-r078 <- read_data('078')  # use positive
-r079 <- read_data('079')  # only strict
-r080 <- read_data('080')  # only relaxed
-r081 <- read_data('081')  # only pairings
-r082 <- read_data('082')  # only extra
-
-r029 <- read_data('036')
-r042 <- read_data('042')
-
 b004 <- read_data('b004') # arith
 b005 <- read_data('b005') # geom
 b006 <- read_data('b006') # max
 
-# r084_ <- r084
 r084 <- read_data('084')  # default
-r085 <- read_data('085')  # reduced DSL
-r086 <- read_data('086')  # simulated
-r087 <- read_data('087')  # simulated + reduced DSL
-r089 <- read_data('089')  # No prune
-r090 <- read_data('090')  # No prune + reduced DSL
-
-r091 <- read_data('091')  # default combined
-r092 <- read_data('092')  # reduced DSL combined
-r093 <- read_data('093')  # simulated combined
-r094 <- read_data('094')  # simulated + reduced DSL combined
-r095 <- read_data('095')  # No prune combined
-r096 <- read_data('096')  # No prune + reduced DSL combined
-
-r097 <- read_data('097')  # Use SBFL
 
 fl001 <- read_data('fl001')
 
+r105 <- read_data('105')
+r106 <- read_data('106')
+r107 <- read_data('107')
+r108 <- read_data('108')
+r109 <- read_data('109')
+r110 <- read_data('110')
+r111 <- read_data('111')
+r112 <- read_data('112')
+r113 <- read_data('113')
+r114 <- read_data('114')
+r115 <- read_data('115')
+r116 <- read_data('116')
+r117 <- read_data('117')
+r118 <- read_data('118')
+r119 <- read_data('119')
+r120 <- read_data('120')
+r121 <- read_data('121')
+
 source('analysis/plots.R')
+
+
+fault_identified_plot('84' = r084, '105' = r105, '106' = r106, '107' = r107, '108' = r108, '121' = r121)
+feedback_type_plot('84' = r084, '105' = r105, '106' = r106, '107' = r107, '108' = r108, '121' = r121)
+
+fault_identified_plot('84' = r084, '109' = r109, '110' = r110, '111' = r111, '112' = r112)
+feedback_type_plot('84' = r084, '109' = r109, '110' = r110, '111' = r111, '112' = r112)
+
+fault_identified_plot('84' = r084, '113' = r113, '114' = r114, '115' = r115, '116' = r116)
+feedback_type_plot('84' = r084, '113' = r113, '114' = r114, '115' = r115, '116' = r116)
+
+fault_identified_plot('84' = r084, '117' = r117, '118' = r118, '119' = r119, '120' = r120)
+feedback_type_plot('84' = r084, '117' = r117, '118' = r118, '119' = r119, '120' = r120)
+
+
+notion2 %>% ggplot(aes(x=lines.missing)) + geom_bar()
+notion2 %>% ggplot(aes(x=lines.wrong)) + geom_bar()
+
+notion2 %>% ggplot(aes(x=literals.missing)) + geom_bar()
+notion2 %>% ggplot(aes(x=literals.wrong)) + geom_bar()
+notion2 %>% ggplot(aes(x=abs(literals.missing) + literals.wrong)) + geom_bar()
+
+notion2 %>% ggplot(aes(x=grade.missing)) + geom_bar() + labs(x='Missing lines in sketch generator?')
+notion2 %>% ggplot(aes(x=grade.wrong)) + geom_bar() + labs(x='Correction position for wrong lines')
+notion2 %>% ggplot(aes(x=Depth)) + geom_bar() + labs(x='Depth')
+notion2 %>% ggplot(aes(x=paste0(grade.missing, grade.wrong))) + geom_bar() + labs(x='Correction position for wrong lines')
+
+
+
+
 
 feedback_type_plot(Default = r045, 'Block const expr' = r046, 'Allow unsafe vars' = r047,
                    '1 extra var' = r048, 'No commutative' = r049, 'No distinct args' = r050,
@@ -130,9 +140,12 @@ inner_join(r045, r056, by = "instance") %>% ggplot(aes(x = real.x, y = real.y)) 
   labs(x = 'r030', y = 'r041')
 
 
-a <- inner_join(r042, r093, by = "instance") %>%
+a <- inner_join(r084, r105, by = "instance") %>%
   filter(feedback_type.x != feedback_type.y) %>%
   select(instance, feedback_type.x, feedback_type.y, pairings.x, mcss.x, mcss.sorted.x, selfeval.lines.x)
+
+a <- inner_join(r099, r103, by = "instance") %>%
+  select(instance, real.x, real.y, feedback_type.x, feedback_type.y, pairings.x, mcss.x, mcss.sorted.x, selfeval.lines.x)
 
 
 a <- r033 %>%
@@ -203,31 +216,35 @@ b004 %>%
   count()
 
 fl001 %>% summarise(a = mean(real))
-fl001 %>% filter(feedback_type != 'Solution OK' & feedback_type != 'Parsing Error' & feedback_type != 'Grounding Error') %>% summarise(a = mean(real))
+fl001 %>%
+  filter(feedback_type != 'Solution OK' &
+           feedback_type != 'Parsing Error' &
+           feedback_type != 'Grounding Error') %>%
+  summarise(a = mean(real))
 
 plot_pdf('feedback', .6 * linewidth, .6 * linewidth, feedback_type_plot(FormHe = r084,
                                                                         # 'Fault Localizer\nOracle' = r086,
                                                                         'Pruning\nDisabled' = r089,
                                                                         angle = 0))
 plot_pdf('times', linewidth, .65 * linewidth, times_inverse_cactus(FormHe = r084,
-                                                                  # 'Fault Localizer\nOracle' = r086,
-                                                                  'Pruning\nDisabled' = r089) +
+                                                                   # 'Fault Localizer\nOracle' = r086,
+                                                                   'Pruning\nDisabled' = r089) +
   geom_vline(xintercept = 600, linetype = 2, color = '#575757'))
 # plot_pdf('fault_identified', linewidth, .8 * linewidth, fault_identified_plot(Default = r068, 'Disable missing\nrelaxed' = r076, 'Disable missing\nstrict' = r075,
 #                                                                               'Enable extra' = r078, 'Disable line pairings' = r077,
 #                                                                               angle = 30))
 plot_pdf('fault_identified', linewidth, .8 * linewidth, fault_identified_plot('Missing A. S.\n(relaxed)' = r080, 'Missing A. S.\n(strict)' = r079,
-                                                                               'Extra Answer\nSet' = r082, 'Line\nMatching' = r081,
-                                                                               # 'SBFL -- geom.\nmean' = b005 %>% filter(selfeval.lines != 'set()'),
-                                                                               # 'SBFL -- arith.\nmean' = b004 %>% filter(selfeval.lines != 'set()'),
-                                                                               'SBFL' = b006,
-                                                                               angle = 30) )
+                                                                              'Extra Answer\nSet' = r082, 'Line\nMatching' = r081,
+                                                                              # 'SBFL -- geom.\nmean' = b005 %>% filter(selfeval.lines != 'set()'),
+                                                                              # 'SBFL -- arith.\nmean' = b004 %>% filter(selfeval.lines != 'set()'),
+                                                                              'SBFL' = b006,
+                                                                              angle = 30))
 plot_pdf('fault_identified_combined', linewidth, .7 * linewidth, fault_identified_plot('Missing A. S.\n(relaxed)' = r080, 'Missing A. S.\n(strict)' = r079,
-                                                                                        'Line\nMatching' = r081,
-                                                                                        # 'SBFL -- geom.\nmean' = b005 %>% filter(selfeval.lines != 'set()'),
-                                                                                        # 'SBFL -- arith.\nmean' = b004 %>% filter(selfeval.lines != 'set()'),
-                                                                                        'FormHe Fault\nLocalization' = r068,
-                                                                                        angle = 0))
+                                                                                       'Line\nMatching' = r081,
+                                                                                       # 'SBFL -- geom.\nmean' = b005 %>% filter(selfeval.lines != 'set()'),
+                                                                                       # 'SBFL -- arith.\nmean' = b004 %>% filter(selfeval.lines != 'set()'),
+                                                                                       'FormHe Fault\nLocalization' = r068,
+                                                                                       angle = 0))
 plot_pdf('fault_grid', linewidth, .5 * linewidth, feedback_fault_grid(r084))
 plot_pdf('fault_grid_partial', linewidth, .7 * linewidth, fault_identified_grid(r084))
 
