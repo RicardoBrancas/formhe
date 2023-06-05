@@ -35,6 +35,7 @@ class Config:
     # optimizations
     block_constant_expressions: bool = False
     allow_unsafe_vars: bool = False
+    allow_not_generated_predicates: bool = False
 
     # parameters
     minimum_depth: int = 2
@@ -46,6 +47,7 @@ class Config:
     skip_mcs_negative_non_relaxed: bool = False
     skip_mcs_negative_relaxed: bool = False
     use_mcs_positive: bool = False
+    use_mfl: bool = False
     skip_mcs_line_pairings: bool = False
     enable_arithmetic: bool = False
     disable_classical_negation: bool = False

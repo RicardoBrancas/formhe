@@ -38,7 +38,7 @@ def main():
         print("Error while grounding.")
         exit(-1)
 
-    instance.line_pairings
+    instance.line_pairings()
 
     for i, instrumented_ast in enumerate(instance.instrumented_asts):
         logger.debug('Instrumented program %d:\n%s', i, '\n'.join(str(x) for x in instrumented_ast))
@@ -77,7 +77,11 @@ def main():
 
     mcs_hit_counter = Counter()
     mcss_negative = OrderedSet()
+    mcss_mfl = OrderedSet()
     mcss_positive = OrderedSet()
+
+    for mfl in instance.all_mfl(instance.missing_models[0][0], i=0):
+        print(mfl)
 
     for i in range(len(instance.asts)):
         # for model in instance.missing_models[i]:
@@ -94,6 +98,11 @@ def main():
                     mcss_negative.append(mcs)
                     for rule in mcs:
                         mcs_hit_counter[rule] += 1
+            if instance.config.use_mfl:
+                for mcs in instance.all_mfl(model, relaxed=False, i=i):
+                    mcss_mfl.append(mcs)
+                    for rule in mcs:
+                        mcs_hit_counter[rule] += 1
             runhelper.timer_stop('mcs.time')
         if instance.extra_models[i]:
             runhelper.timer_start('mcs.time')
@@ -105,16 +114,18 @@ def main():
             runhelper.timer_stop('mcs.time')
 
     runhelper.log_any('mcss.negative.pre', [set(mcs) for mcs in mcss_negative])
+    runhelper.log_any('mcss.mfl.pre', [set(mcs) for mcs in mcss_mfl])
     runhelper.log_any('mcss.positive.pre', [set(mcs) for mcs in mcss_positive])
-    mcss = mcss_negative.union(mcss_positive)
-    runhelper.log_any('mcss.both.pre', [set(mcs) for mcs in mcss])
+    mcss = mcss_negative.union(mcss_mfl).union(mcss_positive)
+    runhelper.log_any('mcss.all.pre', [set(mcs) for mcs in mcss])
 
     if not mcss:
         mcss = OrderedSet([frozenset()])  # search even if no MCS was found
 
     if not instance.config.skip_mcs_line_pairings:
-        if instance.line_pairings:
-            for a, b, cost in instance.line_pairings:
+        line_pairings = instance.line_pairings()
+        if line_pairings:
+            for a, b, cost in line_pairings:
                 if cost <= 2 and cost != 0:
                     mcss = OrderedSet([mcs | {b} for mcs in mcss])
 
@@ -183,6 +194,8 @@ def main():
             mcss = OrderedSet([()])  # search even if no MCS was found
 
     if instance.config.exit_after_fault_localization:
+        for i in range(len(instance.asts)):
+            instance.get_control(i=i)
         exit()
 
     predicates_before_skip = instance.constantCollector.predicates
@@ -229,8 +242,13 @@ def main():
                 # sorted_cores = sorted(modified_instance.cores, key=len)
 
                 atom_enum_constructor = lambda p: Z3Enumerator(trinity_spec, depth, predicates_names=modified_instance.constantCollector.predicates.keys(), cores=None, free_vars=asp_visitor.free_vars,
-                                                               preset_statements=list(p), strict_minimum_depth=not first_depth)
+                                                               preset_statements=list(p), strict_minimum_depth=not first_depth,
+                                                               free_predicates=OrderedSet(predicates_before_skip.keys()) - modified_instance.constantCollector.predicates_generated,
+                                                               force_generate_predicates=modified_instance.constantCollector.predicates_used - modified_instance.constantCollector.predicates_generated)
                 statement_enumerator = StatementEnumerator(atom_enum_constructor, preset_statements + extra_statements, 1, asp_visitor.free_vars, depth)
+
+                logger.info('Unsupported predicates: %s', str(set(OrderedSet(predicates_before_skip.keys()) - modified_instance.constantCollector.predicates_generated)))
+                logger.info('Needed predicates: %s', str(set(modified_instance.constantCollector.predicates_used - modified_instance.constantCollector.predicates_generated)))
 
                 runhelper.timer_start('eval.fail.time')
                 while prog := next(statement_enumerator):

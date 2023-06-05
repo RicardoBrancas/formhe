@@ -15,8 +15,8 @@ ExprType = TypeVar('ExprType')
 
 class Z3Enumerator(SmtEnumerator):
 
-    def __init__(self, spec: TyrellSpec, depth=None, predicates_names=None, cores=None, free_vars=None, preset_statements=None, strict_minimum_depth=True):
-        super().__init__(spec, depth, predicates_names, cores, free_vars, preset_statements, strict_minimum_depth=strict_minimum_depth)
+    def __init__(self, spec: TyrellSpec, depth=None, predicates_names=None, cores=None, free_vars=None, preset_statements=None, strict_minimum_depth=True, free_predicates=None, force_generate_predicates=None):
+        super().__init__(spec, depth, predicates_names, cores, free_vars, preset_statements, strict_minimum_depth=strict_minimum_depth, free_predicates=free_predicates, force_generate_predicates=force_generate_predicates)
 
     def init_solver(self):
         solver = z3.SolverFor('QF_NIA')

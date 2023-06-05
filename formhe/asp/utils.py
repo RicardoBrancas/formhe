@@ -2,6 +2,7 @@ import itertools
 
 import clingo
 import clingo.ast
+from clingo.ast import ASTType
 from ordered_set import OrderedSet
 
 
@@ -27,6 +28,8 @@ class Visitor(clingo.ast.Transformer):
         self.definitions = OrderedSet()
         self.predicates = {}
         self.predicates_typed = {}
+        self.predicates_generated = OrderedSet()
+        self.predicates_used = OrderedSet()
         self.rule_counter = 0
         self.skips = skips
         self.skipped = []
@@ -35,11 +38,19 @@ class Visitor(clingo.ast.Transformer):
         self.definitions.append(definition.name)
         return definition
 
-    def visit_Function(self, function):
+    def visit_Function(self, function, in_skip=False, in_head=None, is_literal=None):
         arg_types = []
         add = True
         if function.name:
             self.predicates[f'{function.name}/{len(function.arguments)}'] = len(function.arguments)
+
+        # print(function, in_skip, in_head, is_literal)
+
+        if not in_skip and in_head and (is_literal or is_literal is None):
+            self.predicates_generated.append(f'{function.name}/{len(function.arguments)}')
+        elif not in_skip and (not in_head or (in_head and not is_literal)):
+            self.predicates_used.append(f'{function.name}/{len(function.arguments)}')
+
         for arg in function.arguments:
             if arg.ast_type == clingo.ast.ASTType.SymbolicTerm:
                 arg_types.append(arg.symbol.type)
@@ -53,6 +64,11 @@ class Visitor(clingo.ast.Transformer):
             self.predicates_typed[f'{function.name}/{len(function.arguments)}'] = arg_types
         return function
 
+    def visit_ConditionalLiteral(self, conditional_literal, **kwargs):
+        conditional_literal.update(literal=self._dispatch(conditional_literal.literal, is_literal=True, **kwargs),
+                                   condition=self._dispatch(conditional_literal.condition, is_literal=False, **kwargs))
+        return conditional_literal
+
     def visit_Rule(self, rule):
         self.rule_counter += 1
         try:
@@ -63,9 +79,11 @@ class Visitor(clingo.ast.Transformer):
 
         if self.skips is not None and self.rule_counter - 1 in self.skips:
             self.skipped.append(rule)
+            rule.update(head=self._dispatch(rule.head, in_skip=True, in_head=True), body=self._dispatch(rule.body, in_skip=True, in_head=False))
             return None
         else:
-            rule.update(**self.visit_children(rule))
+            # rule.update(**self.visit_children(rule))
+            rule.update(head=self._dispatch(rule.head, in_head=True), body=self._dispatch(rule.body, in_head=False))
             return rule
 
 
@@ -74,6 +92,7 @@ class Instrumenter(clingo.ast.Transformer):
     def __init__(self):
         self.counter = 0
         self.rule_counter = 0
+        self.rules = []
         self.relaxation_functions = []
         self.relaxations_function_map = {}
         self.disabled = False
@@ -105,6 +124,7 @@ class Instrumenter(clingo.ast.Transformer):
                                                                         [clingo.ast.SymbolicTerm(rule.location, clingo.Number(self.counter))],
                                                                         0))))
             self.counter += 1
+            self.rules.append(rule)
             return rule
         else:
             return rule

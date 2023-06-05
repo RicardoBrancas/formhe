@@ -426,7 +426,8 @@ class SmtEnumerator(ABC):
     # map from internal k-tree to nodes of program
     program2tree = {}
 
-    def __init__(self, spec: TyrellSpec, depth=None, predicates_names=None, cores=None, free_vars=None, preset_statements=None, strict_minimum_depth=True):
+    def __init__(self, spec: TyrellSpec, depth=None, predicates_names=None, cores=None, free_vars=None, preset_statements=None, strict_minimum_depth=True, free_predicates=None,
+                 force_generate_predicates=None):
         if predicates_names is None:
             predicates_names = []
         if preset_statements is None:
@@ -471,6 +472,10 @@ class SmtEnumerator(ABC):
         if strict_minimum_depth:
             self.create_max_depth_used_constraints()
         # self.create_semantic_constraints()
+
+        if not config.get().allow_not_generated_predicates:
+            self.create_predicate_usage_constraints(free_predicates)
+            self.create_predicate_force_generate_constraints(force_generate_predicates)
 
         self.blocking_template = self.blocking_template_compute()
 
@@ -543,6 +548,42 @@ class SmtEnumerator(ABC):
                 if node.is_leaf and not node.bound and node.depth == self.depth:
                     ctr.append(node.var != 0)
         self.create_assertion(self.smt_namespace.Or(*ctr), 'max_depth_used', False, False)
+
+    def create_predicate_usage_constraints(self, predicates: list[str]):
+        aggregate_prod = self.spec.get_function_production('aggregate')
+        for predicate in predicates:
+            predicate_prod = self.spec.get_function_production(predicate)
+
+            lhs = []
+            for stmt in self.statements:
+                for node in stmt.body_nodes:
+                    lhs.append(node.var == predicate_prod.id)
+            lhs = self.smt_namespace.Or(*lhs)
+
+            rhs = []
+            for stmt in self.statements:
+                if len(stmt.head.children) >= 4:
+                    rhs.append(self.smt_namespace.Or(stmt.head.var == predicate_prod.id, self.smt_namespace.And(stmt.head.var == aggregate_prod.id, stmt.head.children[1].var == predicate_prod.id)))
+                else:
+                    rhs.append(stmt.head.var == predicate_prod.id)
+            rhs = self.smt_namespace.Or(*rhs)
+
+            self.create_assertion(self.smt_namespace.Implies(lhs, rhs), f'predicate_usage_{predicate}', False, False)
+
+    def create_predicate_force_generate_constraints(self, predicates: list[str]):
+        aggregate_prod = self.spec.get_function_production('aggregate')
+        for predicate in predicates:
+            predicate_prod = self.spec.get_function_production(predicate)
+
+            rhs = []
+            for stmt in self.statements:
+                if len(stmt.head.children) >= 4:
+                    rhs.append(self.smt_namespace.Or(stmt.head.var == predicate_prod.id, self.smt_namespace.And(stmt.head.var == aggregate_prod.id, stmt.head.children[1].var == predicate_prod.id)))
+                else:
+                    rhs.append(stmt.head.var == predicate_prod.id)
+            rhs = self.smt_namespace.Or(*rhs)
+
+            self.create_assertion(rhs, f'predicate_force_{predicate}', False, False)
 
     # def create_semantic_constraints(self):
     #     if self.cores is None or self.cores == [] or config.get().no_semantic_constraints:

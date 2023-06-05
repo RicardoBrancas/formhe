@@ -8,10 +8,9 @@ from itertools import product
 from pathlib import Path
 
 import clingo.ast
-
 import utils.clingo
 from clingo import Control
-
+from clingo.ast import ASTType
 from ordered_set import OrderedSet
 
 import runhelper
@@ -133,7 +132,7 @@ class Instance:
             clingo_args = []
         if project:
             clingo_args.append('--project')
-        ctl = Control(clingo_args + [f'{max_sols}'], logger=lambda x, y: None)
+        ctl = Control(clingo_args + [f'{max_sols}'])
         with clingo.ast.ProgramBuilder(ctl) as bld:
             if not instrumented:
                 for stm in self.asts[i]:
@@ -143,9 +142,9 @@ class Instance:
                     bld.add(stm)
             if project:
                 for p in self.domain_predicates:
-                    clingo.ast.parse_string(f'#project {p[0]}/{p[1]}.', bld.add, logger=lambda x, y: None)
+                    clingo.ast.parse_string(f'#project {p[0]}/{p[1]}.', bld.add)
             for arg in args:
-                clingo.ast.parse_string(arg, bld.add, logger=lambda x, y: None)
+                clingo.ast.parse_string(arg, bld.add)
         runhelper.timer_start('grounding.time')
         try:
             ctl.ground([('base', [])])
@@ -274,12 +273,13 @@ class Instance:
                             mcss.append(unsatisfied_vars)
                             logger.info(' '.join(str(x) for x in unsatisfied_vars))
                             clause_r = ''
-                            mcs_blocks.append(':- ' + ','.join(map(str, satisfied_vars)) + '.')
+                            mcs_blocks.append(':- ' + ','.join(map(lambda x: 'not ' + str(x), unsatisfied_vars)) + '.')
                             unsat = True
                         else:
-                            clause_r = ''
-                            mcs_blocks.append(':- ' + ','.join(map(str, satisfied_vars)) + '.')
-                            unsat = True
+                            raise NotImplementedError()
+                            # clause_r = ''
+                            # mcs_blocks.append(':- ' + ','.join(map(lambda x: 'not ' + str(x), unsatisfied_vars)) + '.')
+                            # unsat = True
                     else:
                         return
 
@@ -311,61 +311,203 @@ class Instance:
                     yield frozenset(self.instrumenter.relaxations_function_map[var] for var in unsatisfied_vars)
         return
 
-    @cached_property
-    def line_pairings(self):
+    def all_mfl(self, model, relaxed=False, i=0, positive=False):
+        ctl = self.get_control(max_sols=1, i=i)
+
+        supports = []
+        support_vars = []
+
+        for symbolic_atom in ctl.symbolic_atoms:
+            symbol = symbolic_atom.symbol
+            supports.append(f'{symbol} :- not _support({symbol}).')
+            support_vars.append(clingo.Function(f"_support", [symbol]))
+
+        instrumenter_vars = self.instrumenter.relaxation_functions
+        n = len(instrumenter_vars + support_vars)
+        generate_vars = '0 { ' + '; '.join(map(str, instrumenter_vars + support_vars)) + ' } ' + str(n) + '.'
+        clause_r = ''
+        mcs_blocks = OrderedSet()
+        mcss = OrderedSet()
+
+        if positive:
+            negated_query = ' '.join([self.mcs_query(m) for m in model])
+        else:
+            negated_query = self.mcs_negated_query(model, relaxed)
+
+        logger.info('Transformed query: %s', negated_query)
+
+        unsatisfied_vars = None
+        unsat = True
+        while True:
+            ctl = self.get_control(generate_vars, clause_r, negated_query, ' '.join(supports), *mcs_blocks, max_sols=1, instrumented=True, i=i)
+
+            with ctl.solve(yield_=True) as handle:
+                res = handle.get()
+
+                if res.satisfiable:
+                    unsat = False
+                    m = handle.model()
+                    unsatisfied_vars = []
+                    satisfied_vars = []
+
+                    for var in instrumenter_vars + support_vars:
+                        if not m.contains(var):
+                            unsatisfied_vars.append(var)
+                        else:
+                            satisfied_vars.append(var)
+
+                    unsatisfied_vars = frozenset(unsatisfied_vars)
+                    satisfied_vars = frozenset(satisfied_vars)
+
+                    # print(clause_r if clause_r else generate_vars)
+                    # for mcs_block in mcs_blocks:
+                    #     print(mcs_block)
+                    # print('SAT')
+                    # print('satisfied:', list(map(str, satisfied_vars)))
+                    # print('unsatisfied:', list(map(str, unsatisfied_vars)))
+                    # print('\n\n\n')
+
+                    clause_r = f'{len(satisfied_vars) + 1} {{ {"; ".join(map(str, instrumenter_vars + support_vars))} }} {n}.'
+
+                elif res.unsatisfiable:
+                    # print(clause_r if clause_r else generate_vars)
+                    # for mcs_block in mcs_blocks:
+                    #     print(mcs_block)
+                    # print('UNSAT')
+                    # print('\n\n\n')
+
+                    if not unsat:
+                        if not any(map(lambda mcs: mcs.issubset(unsatisfied_vars), mcss)):
+                            unsatisfied_rules = [self.instrumenter.relaxations_function_map[var] for var in unsatisfied_vars if var in instrumenter_vars]
+                            for var in unsatisfied_vars:
+                                if var in support_vars:
+                                    predicate = var.arguments[0].name
+                                    for rule_i, rule in enumerate(self.instrumenter.rules):
+                                        if rule.ast_type == ASTType.Rule and \
+                                                rule.head and \
+                                                rule.head.ast_type == ASTType.Literal and \
+                                                rule.head.atom.ast_type == ASTType.SymbolicAtom and \
+                                                rule.head.atom.symbol.name == predicate:
+                                            unsatisfied_rules.append(rule_i)
+                            yield frozenset(unsatisfied_rules)
+                            mcss.append(unsatisfied_vars)
+                            logger.info(' '.join(str(x) for x in unsatisfied_vars))
+                            clause_r = ''
+                            mcs_blocks.append(':- ' + ','.join(map(lambda x: 'not ' + str(x), unsatisfied_vars)) + '.')
+                            unsat = True
+                        else:
+                            raise NotImplementedError()
+                            # clause_r = ''
+                            # mcs_blocks.append(':- ' + ','.join(map(lambda x: 'not ' + str(x), unsatisfied_vars)) + '.')
+                            # unsat = True
+                    else:
+                        return
+
+                else:
+                    raise RuntimeError()
+
+    def all_min_mfl(self, model, relaxed=False, i=0, positive=False):
+        ctl = self.get_control(max_sols=1, i=i)
+
+        supports = []
+        support_vars = []
+
+        for symbolic_atom in ctl.symbolic_atoms:
+            symbol = symbolic_atom.symbol
+            supports.append(f'{symbol} :- not _support({symbol}).')
+            support_vars.append(clingo.Function(f"_support", [symbol]))
+
+        instrumenter_vars = self.instrumenter.relaxation_functions
+        n = len(instrumenter_vars + support_vars)
+        generate_vars = '0 { ' + '; '.join(map(str, instrumenter_vars + support_vars)) + ' } ' + str(n) + '.'
+
+        if positive:
+            negated_query = ' '.join([self.mcs_query(m) for m in model])
+        else:
+            negated_query = self.mcs_negated_query(model, relaxed)
+
+        logger.info('Transformed query: %s', negated_query)
+
+        ctl = self.get_control(generate_vars, negated_query, ' '.join(supports), '#maximize{ 1, I, A : _instrumenter(I), _support(A) }.', "#project _instrumenter/1.", "#project _support/1.",
+                               instrumented=True, clingo_args=['--project', '--opt-mode=optN'], i=i)
+        with ctl.solve(yield_=True) as handle:
+            for m in handle:
+                if m.optimality_proven:
+                    # print(m.symbols(atoms=True))
+                    unsatisfied_vars = []
+                    for var in instrumenter_vars:
+                        if not m.contains(var):
+                            unsatisfied_vars.append(var)
+                    supported_vars = []
+                    rules_from_supports = []
+                    for var in support_vars:
+                        if not m.contains(var):
+                            supported_vars.append(var)
+                            predicate = var.arguments[0].name
+                            for rule_i, rule in enumerate(self.instrumenter.rules):
+                                if rule.ast_type == ASTType.Rule and \
+                                        rule.head and \
+                                        rule.head.ast_type == ASTType.Literal and \
+                                        rule.head.atom.ast_type == ASTType.SymbolicAtom and \
+                                        rule.head.atom.symbol.name == predicate:
+                                    rules_from_supports.append(rule_i)
+                    logger.info(' '.join(str(x) for x in unsatisfied_vars))
+                    logger.info(' '.join(str(x) for x in supported_vars))
+                    yield frozenset([self.instrumenter.relaxations_function_map[var] for var in unsatisfied_vars] + rules_from_supports)
+        return
+
+    def bag_of_nodes(self):
+        from formhe.asp.synthesis.AspVisitor import AspVisitor, bag_nodes
+        from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
+        impl_lines = []
+        impl_orig = []
+        impl_nodes = []
+
+        spec_generator = ASPSpecGenerator(self, 0, self.constantCollector.predicates.items())
+        trinity_spec = spec_generator.trinity_spec
+        asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars, True, domain_predicates=self.domain_predicates)
+        for rule in self.base_ast:
+            if rule.ast_type != clingo.ast.ASTType.Rule:
+                continue
+            node = asp_visitor.visit(rule)
+            if isinstance(node, tuple):
+                node = asp_visitor.builder.make_apply('stmt', [node[0] if node[0] else asp_visitor.builder.make_apply('empty', []), asp_visitor.builder.make_apply('and_', node[1])])
+            impl_lines.append(bag_nodes(node))
+            impl_orig.append(rule)
+            impl_nodes.append(node)
+
+        return impl_lines, impl_orig, impl_nodes
+
+    def line_pairings(self, reference=None):
         from multiset import Multiset
         from scipy.optimize import linear_sum_assignment
         import numpy as np
-        from formhe.asp.synthesis.AspVisitor import AspVisitor, bag_nodes
+        from formhe.asp.synthesis.AspVisitor import AspVisitor
         from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
 
-        try:
-            reference_impl_lines = []
-            student_impl_lines = []
-            reference_impl_orig = []
-            student_impl_orig = []
-            reference_impl_nodes = []
-            student_impl_nodes = []
+        if reference is None:
+            reference = self.ground_truth
 
-            spec_generator = ASPSpecGenerator(self.ground_truth, 0, self.constantCollector.predicates.items())
-            trinity_spec = spec_generator.trinity_spec
-            asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars, True, domain_predicates=self.domain_predicates)
-            for rule in self.ground_truth.base_ast:
-                if rule.ast_type != clingo.ast.ASTType.Rule:
-                    continue
-                node = asp_visitor.visit(rule)
-                if isinstance(node, tuple):
-                    node = asp_visitor.builder.make_apply('stmt', [node[0] if node[0] else asp_visitor.builder.make_apply('empty', []), asp_visitor.builder.make_apply('and_', node[1])])
-                reference_impl_lines.append(bag_nodes(node))
-                reference_impl_orig.append(rule)
-                reference_impl_nodes.append(node)
+        try:
+            impl_lines, impl_orig, impl_nodes = Instance.bag_of_nodes(self)
+            reference_impl_lines, reference_impl_orig, reference_impl_nodes = Instance.bag_of_nodes(reference)
 
             spec_generator = ASPSpecGenerator(self, 0, self.constantCollector.predicates.items())
             trinity_spec = spec_generator.trinity_spec
             asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars, True, domain_predicates=self.domain_predicates)
-            for rule in self.base_ast:
-                if rule.ast_type != clingo.ast.ASTType.Rule:
-                    continue
-                node = asp_visitor.visit(rule)
-                if isinstance(node, tuple):
-                    node = asp_visitor.builder.make_apply('stmt', [node[0] if node[0] else asp_visitor.builder.make_apply('empty', []), asp_visitor.builder.make_apply('and_', node[1])])
-                student_impl_lines.append(bag_nodes(node))
-                student_impl_orig.append(rule)
-                student_impl_nodes.append(node)
-
-            if len(reference_impl_lines) < len(student_impl_lines):
-                n = len(student_impl_lines) - len(reference_impl_lines)
+            if len(reference_impl_lines) < len(impl_lines):
+                n = len(impl_lines) - len(reference_impl_lines)
                 reference_impl_lines += [Multiset(['empty']) for i in range(n)]
                 reference_impl_orig += [None for i in range(n)]
                 reference_impl_nodes += [asp_visitor.builder.make_apply('empty', []) for i in range(n)]
-            if len(student_impl_lines) < len(reference_impl_lines):
-                n = len(reference_impl_lines) - len(student_impl_lines)
-                student_impl_lines += [Multiset(['empty']) for i in range(n)]
-                student_impl_orig += [None for i in range(n)]
-                student_impl_nodes += [asp_visitor.builder.make_apply('empty', []) for i in range(n)]
+            if len(impl_lines) < len(reference_impl_lines):
+                n = len(reference_impl_lines) - len(impl_lines)
+                impl_lines += [Multiset(['empty']) for i in range(n)]
+                impl_orig += [None for i in range(n)]
+                impl_nodes += [asp_visitor.builder.make_apply('empty', []) for i in range(n)]
 
-            costs = np.zeros((len(reference_impl_lines), len(student_impl_lines)))
-            for (i, a), (j, b) in product(enumerate(reference_impl_lines), enumerate(student_impl_lines)):
+            costs = np.zeros((len(reference_impl_lines), len(impl_lines)))
+            for (i, a), (j, b) in product(enumerate(reference_impl_lines), enumerate(impl_lines)):
                 # costs[i, j] = len(a.symmetric_difference(b)) / (len(a) + len(b)) if len(a) + len(b) != 0 else 0
                 costs[i, j] = len(a.symmetric_difference(b))
 
@@ -377,9 +519,9 @@ class Instance:
                 logger.debug(reference_impl_orig[a])
                 logger.debug(reference_impl_nodes[a])
                 logger.debug(reference_impl_lines[a])
-                logger.debug(student_impl_orig[b])
-                logger.debug(student_impl_nodes[b])
-                logger.debug(student_impl_lines[b])
+                logger.debug(impl_orig[b])
+                logger.debug(impl_nodes[b])
+                logger.debug(impl_lines[b])
                 logger.debug(costs[a, b])
                 pairings_with_cost.append((a, b, costs[a, b]))
 
