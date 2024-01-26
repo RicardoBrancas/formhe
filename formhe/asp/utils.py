@@ -93,6 +93,7 @@ class Instrumenter(clingo.ast.Transformer):
         self.counter = 0
         self.rule_counter = 0
         self.rules = []
+        self.original_rules = []
         self.relaxation_functions = []
         self.relaxations_function_map = {}
         self.disabled = False
@@ -116,6 +117,7 @@ class Instrumenter(clingo.ast.Transformer):
             relaxation_function = clingo.Function(f"_instrumenter", [clingo.Number(self.counter)])
             self.relaxation_functions.append(relaxation_function)
             self.relaxations_function_map[relaxation_function] = self.rule_counter - 1
+            self.original_rules.append(str(rule))
             rule.body.append(clingo.ast.Literal(rule.location,
                                                 clingo.ast.Sign.NoSign,
                                                 clingo.ast.SymbolicAtom(

@@ -27,6 +27,8 @@ class Config:
     no_enumerator_debug: bool = False
     no_stdin_instance: bool = False
     exit_after_fault_localization: bool = False
+    drop_stderr: bool = False
+    print_only_first_test_case: bool = False
 
     # predicates
     disable_commutative_predicate: bool = False
@@ -36,6 +38,9 @@ class Config:
     block_constant_expressions: bool = False
     allow_unsafe_vars: bool = False
     allow_not_generated_predicates: bool = False
+    enable_redundant_arithmetic_ops: bool = False
+    disable_head_empty_or_non_constant_constraint: bool = False
+    disable_no_dont_care_in_head_constraint: bool = False
 
     # parameters
     minimum_depth: int = 2
@@ -46,17 +51,27 @@ class Config:
     extra_vars: int = 2
     skip_mcs_negative_non_relaxed: bool = False
     skip_mcs_negative_relaxed: bool = False
+    use_mcs_strong_negative_non_relaxed: bool = False # TODO fix me misleading names
+    use_mcs_strong_negative_relaxed: bool = False
     use_mcs_positive: bool = False
     use_mfl: bool = False
     skip_mcs_line_pairings: bool = False
     enable_arithmetic: bool = False
     disable_classical_negation: bool = False
     use_sbfl: bool = False
+    mcs_sorting_method: str = field(metadata=dict(choices=['hit-count', 'hit-count-normalized', 'hit-count-smallest', 'random', 'random-smallest', 'none', 'none-smallest']), default='none-smallest')
 
     # heuristics
 
     # evaluation
     selfeval_lines: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
+    selfeval_deleted_lines: int = None
+    selfeval_changes_generate: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
+    selfeval_changes_generate_n: int = None
+    selfeval_changes_generate_n_unique: int = None
+    selfeval_changes_test: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
+    selfeval_changes_test_n: int = None
+    selfeval_changes_test_n_unique: int = None
     simulate_fault_localization: bool = False
     selfeval_fix_test: bool = False
     selfeval_fix: str = None
@@ -64,6 +79,10 @@ class Config:
 
 parser = ArgumentParser(Config, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 _config: Config = parser.parse_args()
+
+if _config.drop_stderr:
+    f = open(os.devnull, 'w')
+    sys.stderr = f
 
 logging.basicConfig(level=_config.logging_level, format='%(relativeCreated)8d | %(levelname)s | %(name)s | %(message)s')
 logger = logging.getLogger('formhe')

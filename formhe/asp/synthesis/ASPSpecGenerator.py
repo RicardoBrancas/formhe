@@ -50,7 +50,8 @@ class ASPSpecGenerator:
         type_spec.define_type(self.Pool)
         self.Any = EnumType('Any')
         type_spec.define_type(self.Any)
-        self.BodyAggregateFunc = EnumType('BodyAggregateFunc', [func.name for func in clingo.ast.AggregateFunction])  # 'Count', 'Max', 'Min', 'Sum', 'SumPlus'
+        self.BodyAggregateFunc = EnumType('BodyAggregateFunc', [func.name for func in
+                                                                clingo.ast.AggregateFunction])  # 'Count', 'Max', 'Min', 'Sum', 'SumPlus'
         type_spec.define_type(self.BodyAggregateFunc)
         return type_spec
 
@@ -60,11 +61,18 @@ class ASPSpecGenerator:
         prod_spec.add_func_production('empty', self.Empty, [self.Empty], constant_expr=True)
 
         prod_spec.add_func_production('stmt', self.Stmt, [self.Any, self.Any], constant_expr=True)
-        prod_spec.add_func_production('minimize', self.Stmt, [self.Terminal, self.Terminal, self.Any, self.Any], constant_expr=True)
-        prod_spec.add_func_production('aggregate', self.Aggregate, [(self.Terminal, self.Empty), self.PBool, self.PBool, (self.Terminal, self.Empty)], constant_expr=True)
-        prod_spec.add_func_production('aggregate_term', self.Aggregate, [(self.Terminal, self.Empty), self.Terminal, self.PBool, (self.Terminal, self.Empty)], constant_expr=True)
-        prod_spec.add_func_production('aggregate_pool', self.Aggregate, [(self.Terminal, self.Empty), self.Pool, (self.Terminal, self.Empty)], constant_expr=True)
-        prod_spec.add_func_production('body_aggregate', self.PBool, [self.BodyAggregateFunc, self.Aggregate], constant_expr=True)
+        prod_spec.add_func_production('minimize', self.Stmt, [self.Terminal, self.Terminal, self.Any, self.Any],
+                                      constant_expr=True)
+        prod_spec.add_func_production('aggregate', self.Aggregate, [(self.Terminal, self.Empty), self.PBool, self.PBool,
+                                                                    (self.Terminal, self.Empty)], constant_expr=True)
+        prod_spec.add_func_production('aggregate_term', self.Aggregate,
+                                      [(self.Terminal, self.Empty), self.Terminal, self.PBool,
+                                       (self.Terminal, self.Empty)], constant_expr=True)
+        prod_spec.add_func_production('aggregate_pool', self.Aggregate,
+                                      [(self.Terminal, self.Empty), self.Pool, (self.Terminal, self.Empty)],
+                                      constant_expr=True)
+        prod_spec.add_func_production('body_aggregate', self.PBool, [self.BodyAggregateFunc, self.Aggregate],
+                                      constant_expr=True)
 
         prod_spec.add_func_production('and', self.Bool, [self.Any, self.Any], constant_expr=True)
         prod_spec.add_func_production('and_', self.PBool, [self.Any, self.Any], constant_expr=True)
@@ -139,20 +147,21 @@ class ASPSpecGenerator:
         # for p in self.prod_spec.get_function_productions():
         #     pred_spec.add_predicate('is_not_parent', [p.name, 'stmt'])
 
-        for i in self.Terminal.domain:
-            if isinstance(i, int) and i < 0:
-                for j in self.Terminal.domain:
-                    if isinstance(j, int) and -i == j:
-                        pred_spec.add_predicate('is_not_parent', ['add', (self.Terminal, i)])
-                        pred_spec.add_predicate('is_not_parent', ['sub', (self.Terminal, i)])
+        if not self.instance.config.enable_redundant_arithmetic_ops:
+            for i in self.Terminal.domain:
+                if isinstance(i, int) and i < 0:
+                    for j in self.Terminal.domain:
+                        if isinstance(j, int) and -i == j:
+                            pred_spec.add_predicate('is_not_parent', ['add', (self.Terminal, i)])
+                            pred_spec.add_predicate('is_not_parent', ['sub', (self.Terminal, i)])
 
-        pred_spec.add_predicate('is_not_parent', ['add', (self.Terminal, 0)])
-        pred_spec.add_predicate('is_not_parent', ['sub', (self.Terminal, 0)])
-        pred_spec.add_predicate('is_not_parent', ['div', (self.Terminal, 0)])
-        pred_spec.add_predicate('is_not_parent', ['div', (self.Terminal, 1), [1]])
-        # pred_spec.add_predicate('is_not_parent', ['div', (self.Terminal, -1), [1]])
-        pred_spec.add_predicate('is_not_parent', ['mul', (self.Terminal, 0)])
-        pred_spec.add_predicate('is_not_parent', ['mul', (self.Terminal, 1)])
+            pred_spec.add_predicate('is_not_parent', ['add', (self.Terminal, 0)])
+            pred_spec.add_predicate('is_not_parent', ['sub', (self.Terminal, 0)])
+            pred_spec.add_predicate('is_not_parent', ['div', (self.Terminal, 0)])
+            pred_spec.add_predicate('is_not_parent', ['div', (self.Terminal, 1), [1]])
+            # pred_spec.add_predicate('is_not_parent', ['div', (self.Terminal, -1), [1]])
+            pred_spec.add_predicate('is_not_parent', ['mul', (self.Terminal, 0)])
+            pred_spec.add_predicate('is_not_parent', ['mul', (self.Terminal, 1)])
 
         pred_spec.add_predicate('distinct_args', ['eq'])
         pred_spec.add_predicate('distinct_args', ['neq'])

@@ -1,0 +1,18 @@
+ChangeLog: 1
+FixDescription: Ensure that each node is assigned exactly one color, and that neighboring nodes do not share the same color.
+OriginalCode@1-1:
+[1] { assign(X,1..k) } = 1 :- node(X).
+FixedCode@1-1:
+[1] 1 { assign(X,1..k) } 1 :- node(X).
+[0] :- e(X,Y), assign(X,C), assign(Y,C).
+
+Type: <modified> <added>
+
+```
+1 { assign(X,1..k) } 1 :- node(X).
+:- e(X,Y), assign(X,C), assign(Y,C).
+```
+
+Explanation:
+- I modified the rule to ensure each node is assigned exactly one color by enforcing that exactly one color is picked for each node.
+- I added a constraint to ensure that no two adjacent nodes share the same color. This is done by adding a rule that becomes unsatisfiable if there exist edges where both nodes are assigned the same color.

@@ -1,0 +1,17 @@
+%formhe-groundtruth:../../correct_instances/mooshak/B_0_1.lp
+%formhe-selfeval-lines:
+%formhe-selfeval-deleted-lines:2
+%formhe-selfeval-changes-generate:
+%formhe-selfeval-changes-generate-n:0
+%formhe-selfeval-changes-generate-n-unique:0
+%formhe-selfeval-changes-test:
+%formhe-selfeval-changes-test-n:0
+%formhe-selfeval-changes-test-n-unique:0
+%formhe-domain-predicates:sel/1
+%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZShhLCAxKS4KZShhLCAyKS4KZShiLCAzKS4KZShiLCA0KS4KZShjLCAxKS4KZShjLCAzKS4K
+
+#program base.
+s(X) :- e(X,E).
+%
+%
+#false :- inter(X,Y); sel(X); sel(Y).

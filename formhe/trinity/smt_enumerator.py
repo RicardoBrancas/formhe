@@ -245,6 +245,9 @@ class Statement:
                         enumerator.create_assertion(enumerator.smt_namespace.Implies(node.var == p.id, enumerator.smt_namespace.Or(*ctr)))
 
     def create_head_empty_or_non_constant_constraints(self, enumerator: 'SmtEnumerator'):
+        if config.get().disable_head_empty_or_non_constant_constraint:
+            return
+
         lhs_ctr = []
         for var in self.head.collect_vars():
             lhs_ctr.append(var == 0)
@@ -259,6 +262,9 @@ class Statement:
         enumerator.create_assertion(enumerator.smt_namespace.Or(lhs_ctr, rhs_ctr), f'{self.id}_head_empty_or_non_const')
 
     def create_no_dont_care_in_head_constraints(self, enumerator: 'SmtEnumerator'):
+        if config.get().disable_no_dont_care_in_head_constraint:
+            return
+
         dont_care_prod = enumerator.spec.get_enum_production(enumerator.spec.get_type('Terminal'), '_')
         ctr = []
         if len(self.head.children) >= 4:

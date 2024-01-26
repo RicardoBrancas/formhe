@@ -1,0 +1,18 @@
+---
+ChangeLog: 1
+FixDescription: Modifying the constraint that prevents two neighboring nodes from having the same color. The original constraint is slightly incorrect because it doesn't handle the symmetry in the edges properly due to the undirected nature of the graph.
+OriginalCode@2-2:
+[2] :- e(X,Y), assign(X,C), assign(Y,C).
+
+FixedCode@2-2:
+[2] :- e(X,Y), assign(X,C), assign(Y,C).
+[0] :- e(Y,X), assign(X,C), assign(Y,C).
+
+Type: <modified> <added>
+
+```
+{ assign(X,1..k) } = 1 :- node(X).
+:- e(X,Y), assign(X,C), assign(Y,C).
+:- e(Y,X), assign(X,C), assign(Y,C).
+```
+---

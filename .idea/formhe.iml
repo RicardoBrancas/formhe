@@ -7,8 +7,9 @@
       <excludeFolder url="file://$MODULE_DIR$/dist" />
       <excludeFolder url="file://$MODULE_DIR$/build" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.11.0 WSL (Ubuntu): (/home/ricardo/miniconda3/envs/formhe/bin/python3)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.10.12 WSL (Ubuntu): (/home/ricardo/miniconda3/envs/formhe/bin/python3)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="runhelper" />
+    <orderEntry type="module" module-name="gitlab" />
   </component>
 </module>

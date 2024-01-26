@@ -1,0 +1,22 @@
+---
+ChangeLog: 1
+FixDescription: Modified the constraints to correctly express that no two neighbors should have the same color and also added a rule to ensure that every node is assigned at least one color. 
+OriginalCode@2-2:
+[2] :- e(X,Y), assign(X,C), assign(Y,C).
+FixedCode@2-2:
+[2] :- e(X,Y), assign(X,C), assign(Y,C), X != Y.
+
+OriginalCode@1-1:
+[1] 1{assign(X:Y,1..k)}1 :- e(X,Y).
+FixedCode@1-1:
+[1] 1{assign(X,1..k)}1 :- e(X,_).
+[1] 1{assign(Y,1..k)}1 :- e(_,Y).
+
+Type: <modified> <added>
+
+```
+1{assign(X,1..k)}1 :- e(X,_).
+1{assign(Y,1..k)}1 :- e(_,Y).
+:- e(X,Y), assign(X,C), assign(Y,C), X != Y.
+```
+---

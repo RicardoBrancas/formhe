@@ -2,5 +2,8 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../gitlab/ist424860" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../gitlab/ist424860_test" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../runhelper" vcs="Git" />
   </component>
 </project>

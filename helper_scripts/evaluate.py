@@ -58,7 +58,7 @@ def process_data(instance: str, instance_data: dict, out_file: str):
 
 if __name__ == '__main__':
     if not args.instances:
-        instances = glob.glob('buggy_instances/**/*.lp', recursive=True)
+        instances = glob.glob(r'instances/**/*.lp', recursive=True)
     else:
         instances = []
         with open(args.instances) as inst_list:
@@ -72,7 +72,7 @@ if __name__ == '__main__':
     runner.register_instance_callback(process_data)
 
     for instance in instances:
-        instance_name = re.search(r'buggy_instances/(.*)\.lp', instance)[1]
+        instance_name = re.search(r'instances/(.*)\.lp', instance)[1]
         out_file = f'analysis/data/{args.name}/{instance_name}.log'
         command = [sys.executable, 'formhe/asp_integrated.py', instance, '--logging-level', 'INFO', '--no-stdin-instance', '--eval-params', args_base64] + other_args
         runner.schedule(instance_name, command, out_file)

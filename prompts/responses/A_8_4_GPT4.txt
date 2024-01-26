@@ -1,0 +1,17 @@
+---
+ChangeLog: 1
+FixDescription: Adjusting the rule to ensure that neighbors don't share the same color. The original rule was not correctly ensuring that no two neighbors have the same color. The revised rule ensures that any two nodes connected by an edge do not have the same color.
+OriginalCode@3-3:
+[3] :- assign(N, C), assign(A, C), e(N,A).
+FixedCode@3-3:
+[3] :- assign(N, C), assign(A, C), e(N,A), N != A.
+
+Type: <modified>
+
+```
+k(1..n).
+1 { assign(N, C) : k(C) } 1 :- e(_, N).
+1 { assign(N, C) : k(C) } 1 :- e(N, _).
+:- assign(N, C), assign(A, C), e(N,A), N != A.
+```
+---

@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/formhe.iml" filepath="$PROJECT_DIR$/.idea/formhe.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../gitlab/.idea/gitlab.iml" filepath="$PROJECT_DIR$/../gitlab/.idea/gitlab.iml" />
       <module fileurl="file://$PROJECT_DIR$/../runhelper/.idea/runhelper.iml" filepath="$PROJECT_DIR$/../runhelper/.idea/runhelper.iml" />
     </modules>
   </component>

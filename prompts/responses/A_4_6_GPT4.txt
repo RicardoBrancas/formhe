@@ -1,0 +1,18 @@
+---
+ChangeLog: 1
+FixDescription: Corrected the edge clause to accurately represent an undirected graph and the constraints for the coloring problem.
+OriginalCode@3-3:
+[3] :- edge(X,Y), assign(X,C), assign(Y,C).
+FixedCode@3-3:
+[3] :- e(X,Y), assign(X,C), assign(Y,C).
+[3] :- e(Y,X), assign(X,C), assign(Y,C).
+
+Type: <modified> <added>
+
+```
+col(1..k).
+{ assign(X,C) : col(C) } == 1 :- node(X).
+:- e(X,Y), assign(X,C), assign(Y,C).
+:- e(Y,X), assign(X,C), assign(Y,C).
+```
+---

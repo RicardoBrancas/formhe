@@ -132,7 +132,7 @@ class Instance:
             clingo_args = []
         if project:
             clingo_args.append('--project')
-        ctl = Control(clingo_args + [f'{max_sols}'])
+        ctl = Control(clingo_args + [f'{max_sols}'], logger=lambda x, y: None)
         with clingo.ast.ProgramBuilder(ctl) as bld:
             if not instrumented:
                 for stm in self.asts[i]:
@@ -196,6 +196,7 @@ class Instance:
         def model_callback(m):
             if (not self.config.optimization_problem) or m.optimality_proven:
                 tmp = m.symbols(shown=True)
+                runhelper.tag_increment('answer.set.count')
                 self.models[i].add(tuple(sorted([x for x in tmp])))
 
         ctl.solve(on_model=model_callback)
@@ -285,6 +286,64 @@ class Instance:
 
                 else:
                     raise RuntimeError()
+
+    def all_weak_mcs(self, model, relaxed=False, i=0, positive=False):
+        logger.info(f'Iterating all strong {"relaxed " if relaxed else ""}MCSs')
+
+        instrumenter_vars = self.instrumenter.relaxation_functions
+        mcs_blocks = OrderedSet()
+        mcss = OrderedSet()
+
+        if positive:
+            negated_query = ' '.join([self.mcs_query(m) for m in model])
+        else:
+            negated_query = self.mcs_negated_query(model, relaxed)
+
+        logger.info('Transformed query: %s', negated_query)
+
+        while True:
+            untested_vars = OrderedSet(instrumenter_vars)
+            unsatisfied_vars = OrderedSet()
+            satisfied_vars = OrderedSet()
+            unsat = True
+            while untested_vars:
+                var = untested_vars[0]
+                untested_vars = untested_vars - {var}
+                clause_s = ' '.join(map(lambda x: f'{x}.', satisfied_vars.union({var})))
+                keep_unsats = ' '.join(map(lambda x: f'-{x}.', unsatisfied_vars))
+                clause_choice = '0 { ' + '; '.join(map(str,  OrderedSet(instrumenter_vars) - satisfied_vars.union({var}))) + ' }.'
+                print(clause_s)
+                print(keep_unsats)
+                print(negated_query)
+                for mcs_block in mcs_blocks:
+                    print(mcs_block)
+                print()
+                print()
+                print()
+                # ctl = self.get_control(clause_s, clause_choice, negated_query, *mcs_blocks, max_sols=1, instrumented=True, i=i)
+                ctl = self.get_control(clause_s, keep_unsats, negated_query, *mcs_blocks, max_sols=1, instrumented=True, i=i)
+
+                with ctl.solve(yield_=True) as handle:
+                    res = handle.get()
+
+                    if res.satisfiable:
+                        unsat = False
+                        satisfied_vars.add(var)
+                    elif res.unsatisfiable:
+                        unsatisfied_vars.add(var)
+                    else:
+                        raise RuntimeError()
+
+            if not unsat:
+                yield frozenset(self.instrumenter.relaxations_function_map[var] for var in unsatisfied_vars)
+                mcss.append(frozenset(unsatisfied_vars))
+                logger.info(' '.join(str(x) for x in unsatisfied_vars))
+                clause_r = ''
+                mcs_block = ''
+                mcs_blocks.append('1 { ' + '; '.join(map(str, unsatisfied_vars)) + ' }.')
+                unsat = True
+            else:
+                return
 
     def all_min_mcs(self, model, relaxed=False, i=0, positive=False):
         logger.info(f'Iterating all {"relaxed " if relaxed else ""}min MCSs')
@@ -389,6 +448,15 @@ class Instance:
                                                 rule.head.atom.ast_type == ASTType.SymbolicAtom and \
                                                 rule.head.atom.symbol.name == predicate:
                                             unsatisfied_rules.append(rule_i)
+                                        elif rule.ast_type == ASTType.Rule and \
+                                                rule.head and \
+                                                rule.head.ast_type == ASTType.Aggregate:
+                                            for element in rule.head.elements:
+                                                if element.ast_type == ASTType.ConditionalLiteral and \
+                                                        element.literal.ast_type == ASTType.Literal and \
+                                                        element.literal.atom.ast_type == ASTType.SymbolicAtom and \
+                                                        element.literal.atom.symbol.name == predicate:
+                                                    unsatisfied_rules.append(rule_i)
                             yield frozenset(unsatisfied_rules)
                             mcss.append(unsatisfied_vars)
                             logger.info(' '.join(str(x) for x in unsatisfied_vars))
