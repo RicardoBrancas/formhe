@@ -29,6 +29,7 @@ class Config:
     exit_after_fault_localization: bool = False
     drop_stderr: bool = False
     print_only_first_test_case: bool = False
+    external_fl: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
 
     # predicates
     disable_commutative_predicate: bool = False

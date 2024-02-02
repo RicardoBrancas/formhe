@@ -9,6 +9,8 @@ import random
 
 import clingo.ast
 
+from fl.Combination import CombinationFaultLocalizer
+from fl.Debug import DebugFL
 from formhe.asp.highlithing_visitor import AspHighlithingVisitor, MaxScorer, RuleScoreCalculator
 from ordered_set import OrderedSet
 
@@ -42,8 +44,6 @@ def main():
     except InstanceGroundingException:
         print("Error while grounding.")
         exit(-1)
-
-    instance.line_pairings()
 
     for i, instrumented_ast in enumerate(instance.instrumented_asts):
         logger.debug('Instrumented program %d:\n%s', i, '\n'.join(str(x) for x in instrumented_ast))
@@ -123,187 +123,12 @@ def main():
         print('No problems found\n')
         exit()
 
-    mcs_hit_counter = Counter()
-    mcss_negative = OrderedSet()
-    strong_mcss_negative = OrderedSet()
-    mcss_mfl = OrderedSet()
-    mcss_positive = OrderedSet()
-
-    runhelper.log_any('models.missing', [len(x) for x in instance.missing_models])
-    runhelper.log_any('models.extra', [len(x) for x in instance.extra_models])
-
-    for i in range(len(instance.asts)):
-        for model in instance.missing_models[i]:
-            # if instance.missing_models[i]:
-            #     model = instance.missing_models[i][0]
-            runhelper.timer_start('mcs.time')
-            if not instance.config.skip_mcs_negative_non_relaxed:
-                for mcs in instance.all_mcs(model, relaxed=False, i=i):
-                    mcss_negative.append(mcs)
-                    for rule in mcs:
-                        mcs_hit_counter[rule] += 1
-            runhelper.timer_stop('mcs.time')
-            runhelper.timer_start('mcs.time')
-            if not instance.config.skip_mcs_negative_relaxed:
-                for mcs in instance.all_mcs(model, relaxed=True, i=i):
-                    mcss_negative.append(mcs)
-                    for rule in mcs:
-                        mcs_hit_counter[rule] += 1
-            runhelper.timer_stop('mcs.time')
-            runhelper.timer_start('mcs.time')
-            if instance.config.use_mfl:
-                for mcs in instance.all_mfl(model, relaxed=False, i=i):
-                    mcss_mfl.append(mcs)
-                    for rule in mcs:
-                        mcs_hit_counter[rule] += 1
-            runhelper.timer_stop('mcs.time')
-            runhelper.timer_start('mcs.time')
-            if instance.config.use_mcs_strong_negative_non_relaxed:
-                for mcs in instance.all_weak_mcs(model, relaxed=False, i=i):
-                    strong_mcss_negative.append(mcs)
-                    for rule in mcs:
-                        mcs_hit_counter[rule] += 1
-            runhelper.timer_stop('mcs.time')
-            runhelper.timer_start('mcs.time')
-            if instance.config.use_mcs_strong_negative_relaxed:
-                for mcs in instance.all_weak_mcs(model, relaxed=True, i=i):
-                    strong_mcss_negative.append(mcs)
-                    for rule in mcs:
-                        mcs_hit_counter[rule] += 1
-            runhelper.timer_stop('mcs.time')
-
-        if instance.extra_models[i]:
-            runhelper.timer_start('mcs.time')
-            if instance.config.use_mcs_positive:
-                for mcs in instance.all_mcs(instance.extra_models[i], i=i, positive=True):
-                    mcss_positive.append(mcs)
-                    for rule in mcs:
-                        mcs_hit_counter[rule] += 1
-            runhelper.timer_stop('mcs.time')
-
-    runhelper.log_any('symbolic.atoms.first', len(instance.controls[0].symbolic_atoms))
-    runhelper.log_any('symbolic.atoms.all', [len(ctl.symbolic_atoms) for ctl in instance.controls])
-
-    runhelper.log_any('mcss.negative.pre', [set(mcs) for mcs in mcss_negative])
-    runhelper.log_any('strong.mcss.negative.pre', [set(mcs) for mcs in strong_mcss_negative])
-    runhelper.log_any('mcss.mfl.pre', [set(mcs) for mcs in mcss_mfl])
-    runhelper.log_any('mcss.positive.pre', [set(mcs) for mcs in mcss_positive])
-    mcss = mcss_negative.union(strong_mcss_negative).union(mcss_mfl).union(mcss_positive)
-    runhelper.log_any('mcss.all.pre', [set(mcs) for mcs in mcss])
-
-    if not mcss:
-        mcss = OrderedSet([frozenset()])  # search even if no MCS was found
-
-    if not instance.config.skip_mcs_line_pairings:
-        line_pairings = instance.line_pairings()
-        if line_pairings:
-            for a, b, cost in line_pairings:
-                if cost <= 2 and cost != 0:
-                    mcss = OrderedSet([mcs | {b} for mcs in mcss])
-
-    if instance.config.use_sbfl:
-        try:
-            highlighter = AspHighlithingVisitor()
-
-            highlighter.highlight(config.get().input_file, list(chain.from_iterable(instance.missing_models)))
-
-            scorer = MaxScorer()
-            rule_score_calculator = RuleScoreCalculator(highlighter.graph.weights, scorer)
-
-            clingo.ast.parse_files([config.get().input_file], lambda x: rule_score_calculator.visit(x))
-
-            selected_lines = set([rule for rule, score in sorted(rule_score_calculator.scorer.get_scores(), key=lambda x: x[1], reverse=True)[:1]])
-
-            mcss = OrderedSet([mcs | selected_lines for mcs in mcss])
-        except:
-            pass
-
-    runhelper.log_any('mcss', [set(mcs) for mcs in mcss])
-    runhelper.log_any('mcss.hit.count', mcs_hit_counter)
-    match instance.config.mcs_sorting_method:
-        case 'none':
-            mcss_sorted = list(map(set, mcss))
-        case 'none-smallest':
-            mcss_sorted = list(map(set, sorted(mcss, key=lambda mcs: len(mcs) if len(mcs) != 0 else math.inf)))
-        case 'hit-count':
-            mcss_sorted = list(map(set, sorted(mcss, key=lambda mcs: sum(map(lambda rule: mcs_hit_counter[rule], mcs)), reverse=True)))
-        case 'hit-count-normalized':
-            mcss_sorted = list(map(set, sorted(mcss, key=lambda mcs: sum(map(lambda rule: mcs_hit_counter[rule], mcs)) / len(mcs) if len(mcs) != 0 else math.inf, reverse=True)))
-        case 'hit-count-smallest':
-            mcss_sorted = list(map(set, sorted(mcss, key=lambda mcs: (-len(mcs) if len(mcs) != 0 else -math.inf, sum(map(lambda rule: mcs_hit_counter[rule], mcs))), reverse=True)))
-        case 'random':
-            random_instance = random.Random(instance.config.seed)
-            mcss_sorted = list(map(set, sorted(mcss, key=lambda mcs: random_instance.random())))
-        case 'random-smallest':
-            random_instance = random.Random(instance.config.seed)
-            mcss_sorted = list(map(set, sorted(mcss, key=lambda mcs: (len(mcs) if len(mcs) != 0 else math.inf, random_instance.random()))))
-        case _:
-            raise NotImplementedError(f'Unrecognized MCS sorting method {instance.config.mcs_sorting_method}')
-    runhelper.log_any('mcss.sorted', mcss_sorted)
-
-    if instance.config.selfeval_lines is not None:
-        mcs_union = set().union(*mcss)
-        faulty_lines = set(instance.config.selfeval_lines)
-        runhelper.log_any('mcss.union', mcs_union)
-        runhelper.log_any('selfeval.lines', faulty_lines)
-        runhelper.log_any('selfeval.deleted.lines', instance.config.selfeval_deleted_lines)
-        runhelper.log_any('selfeval.changes.generate', instance.config.selfeval_changes_generate)
-        runhelper.log_any('selfeval.changes.generate.n', instance.config.selfeval_changes_generate_n)
-        runhelper.log_any('selfeval.changes.generate.n.unique', instance.config.selfeval_changes_generate_n_unique)
-        runhelper.log_any('selfeval.changes.test', instance.config.selfeval_changes_test)
-        runhelper.log_any('selfeval.changes.test.n', instance.config.selfeval_changes_test_n)
-        runhelper.log_any('selfeval.changes.test.n.unique', instance.config.selfeval_changes_test_n_unique)
-        if not faulty_lines and (not mcs_union or mcs_union == {()}):
-            runhelper.log_any('fault.identified', 'Yes (no incorrect lines)')
-
-        elif not faulty_lines:
-            runhelper.log_any('fault.identified', 'Wrong (no incorrect lines)')
-
-        elif not mcs_union or mcs_union == {()}:
-            runhelper.log_any('fault.identified', 'No (no lines identified)')
-
-        elif set(mcss_sorted[0]) == faulty_lines:
-            runhelper.log_any('fault.identified', 'Yes (first MCS)')
-
-        elif set(mcss_sorted[0]) < faulty_lines:
-            runhelper.log_any('fault.identified', 'Subset (first MCS)')
-
-        elif set(mcss_sorted[0]) > faulty_lines:
-            runhelper.log_any('fault.identified', 'Superset (first MCS)')
-
-        elif not set(mcss_sorted[0]).isdisjoint(faulty_lines):
-            runhelper.log_any('fault.identified', 'Not Disjoint (first MCS)')
-
-        elif any(map(lambda x: set(x) == faulty_lines, mcss_sorted)):
-            runhelper.log_any('fault.identified', 'Yes (not first MCS)')
-
-        elif any(map(lambda x: set(x) < faulty_lines, mcss_sorted)):
-            runhelper.log_any('fault.identified', 'Subset (not first MCS)')
-
-        elif any(map(lambda x: set(x) > faulty_lines, mcss_sorted)):
-            runhelper.log_any('fault.identified', 'Superset (not first MCS)')
-
-        elif any(map(lambda x: not set(x).isdisjoint(faulty_lines), mcss_sorted)):
-            runhelper.log_any('fault.identified', 'Not Disjoint (not first MCS)')
-
-        else:
-            runhelper.log_any('fault.identified', 'Wrong (wrong lines identified)')
-
-        if len(instance.config.selfeval_lines) > 0 and instance.config.selfeval_fix_test and instance.config.selfeval_fix is not None:
-            spec_generator = ASPSpecGenerator(instance.ground_truth, 0, instance.constantCollector.predicates.items())
-            trinity_spec = spec_generator.trinity_spec
-            asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars)
-            asp_interpreter = AspInterpreter(instance, instance.constantCollector.predicates.keys())
-
-            if asp_interpreter.test(instance.config.selfeval_fix):
-                runhelper.log_any('fault.partial', 'Yes')
-            else:
-                runhelper.log_any('fault.partial', 'No')
+    fault_localizer = CombinationFaultLocalizer(instance)
+    mcss = fault_localizer.fault_localize()
 
     if instance.config.simulate_fault_localization and instance.config.selfeval_lines is not None:
-        mcss_sorted = OrderedSet([tuple(instance.config.selfeval_lines)])
-        if not mcss_sorted:
-            mcss_sorted = OrderedSet([()])  # search even if no MCS was found
+        debug_fl = DebugFL(instance)
+        mcss = debug_fl.fault_localize()
 
     predicates_before_skip = instance.constantCollector.predicates
 
@@ -314,12 +139,14 @@ def main():
         print('The following predicates are used in a rule but are never generated: ' + ' '.join(map(str, set(instance.constantCollector.predicates_used - instance.constantCollector.predicates_generated))))
         print()
 
-    if mcss_sorted[0]:
+    if mcss[0]:
 
         print()
         print('Suggested lines where bug is likely located:  ')
 
-        for line in mcss_sorted[0]:
+        for line in mcss[0]:
+            if not line:
+                continue
             print(f'**[{line}]**', '`' + instance.instrumenter.original_rules[line] + '`', '  ')
 
         print()
@@ -354,7 +181,7 @@ def main():
     first_depth = True
     for depth in range(config.get().minimum_depth, config.get().maximum_depth):
         for extra_statements in [[], [('empty', [])], [('empty', [None])], [('empty', [None]), ('empty', [None])]]:
-            for mcs in mcss_sorted:
+            for mcs in mcss:
                 modified_instance = Instance(config.get().input_file, skips=mcs, ground_truth_instance=instance.ground_truth)
                 spec_generator = ASPSpecGenerator(modified_instance, modified_instance.config.extra_vars, predicates_before_skip.items())
                 trinity_spec = spec_generator.trinity_spec
