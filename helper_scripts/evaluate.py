@@ -20,6 +20,7 @@ parser.add_argument('-m', default=61440, type=int, help='memout')
 parser.add_argument('-p', default=1, type=int, help='#processes')
 parser.add_argument('--replace', action='store_true', help='replace previous run')
 parser.add_argument('--sample', type=float)
+parser.add_argument('--shuffle', action='store_true')
 parser.add_argument('--instances')
 parser.add_argument('name', metavar='NAME', help="name of the result file")
 
@@ -68,11 +69,14 @@ if __name__ == '__main__':
     if args.sample:
         instances = random.sample(instances, int(len(instances) * args.sample))
 
-    runner = Runner('helper_scripts/runsolver', 'analysis/data/' + args.name + '.csv', timeout=args.t, memout=args.m, pool_size=args.p)
+    if args.shuffle:
+        random.shuffle(instances)
+
+    runner = Runner('helper_scripts/runsolver', 'analysis/data/' + args.name + '.csv', timeout=args.t, memout=args.m, pool_size=args.p, token="6534160271:AAF2Wui-s86BgQxOhtoeNV5WzYFKDv1ahkk", chat_id="148166194")
     runner.register_instance_callback(process_data)
 
     for instance in instances:
-        instance_name = re.search(r'instances/(.*)\.lp', instance)[1]
+        instance_name = re.search(r'.*?/(.*)\.lp', instance)[1]
         out_file = f'analysis/data/{args.name}/{instance_name}.log'
         command = [sys.executable, 'formhe/asp_integrated.py', instance, '--logging-level', 'INFO', '--no-stdin-instance', '--eval-params', args_base64] + other_args
         runner.schedule(instance_name, command, out_file)

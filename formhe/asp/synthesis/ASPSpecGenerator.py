@@ -4,6 +4,26 @@ from formhe.asp.instance import Instance
 from formhe.trinity.DSL import TyrellSpec, TypeSpec, ValueType, EnumType, ProductionSpec, PredicateSpec, ProgramSpec
 
 
+def max_children_except_aggregate(spec) -> int:
+    """Finds the maximum number of children in the productions"""
+    max = 0
+    for p in spec.get_function_productions():
+        if p.name != 'aggregate' and p.name != 'aggregate_term' and p.name != 'aggregate_pool' and p.name != 'minimize':
+            # print(p.name, len(p.rhs))
+            if len(p.rhs) > max:
+                max = len(p.rhs)
+    return max
+
+
+def max_children_with_aggregate(spec) -> int:
+    """Finds the maximum number of children in the productions"""
+    max = 0
+    for p in spec.get_function_productions():
+        if len(p.rhs) > max:
+            max = len(p.rhs)
+    return max
+
+
 class ASPSpecGenerator:
 
     def __init__(self, instance: Instance, free_vars: int, predicates: list = None) -> None:
@@ -61,6 +81,7 @@ class ASPSpecGenerator:
         prod_spec.add_func_production('empty', self.Empty, [self.Empty], constant_expr=True)
 
         prod_spec.add_func_production('stmt', self.Stmt, [self.Any, self.Any], constant_expr=True)
+        prod_spec.add_func_production('define', self.Stmt, [self.Any, self.Any], constant_expr=True)
         prod_spec.add_func_production('minimize', self.Stmt, [self.Terminal, self.Terminal, self.Any, self.Any],
                                       constant_expr=True)
         prod_spec.add_func_production('aggregate', self.Aggregate, [(self.Terminal, self.Empty), self.PBool, self.PBool,
@@ -110,6 +131,7 @@ class ASPSpecGenerator:
         pred_spec.add_predicate('not_occurs', ['or'])
         pred_spec.add_predicate('not_occurs', ['stmt_and'])
         pred_spec.add_predicate('not_occurs', ['stmt'])
+        pred_spec.add_predicate('not_occurs', ['define'])
         # pred_spec.add_predicate('not_occurs', ['aggregate'])
         pred_spec.add_predicate('not_occurs', ['tuple'])
         pred_spec.add_predicate('not_occurs', ['pool'])
@@ -146,6 +168,9 @@ class ASPSpecGenerator:
 
         # for p in self.prod_spec.get_function_productions():
         #     pred_spec.add_predicate('is_not_parent', [p.name, 'stmt'])
+
+        for predicate_name, _ in self.predicates:
+            pred_spec.add_predicate('is_predicate', [predicate_name])
 
         if not self.instance.config.enable_redundant_arithmetic_ops:
             for i in self.Terminal.domain:

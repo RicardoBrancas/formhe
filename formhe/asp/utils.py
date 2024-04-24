@@ -33,6 +33,8 @@ class Visitor(clingo.ast.Transformer):
         self.rule_counter = 0
         self.skips = skips
         self.skipped = []
+        self.not_skipped = []
+        self.in_definition_block = False
 
     def visit_Definition(self, definition):
         self.definitions.append(definition.name)
@@ -72,7 +74,11 @@ class Visitor(clingo.ast.Transformer):
     def visit_Rule(self, rule):
         self.rule_counter += 1
         try:
-            if rule.head.atom.symbol.name == "formhe_definition_begin" or rule.head.atom.symbol.name == "formhe_definition_end":
+            if rule.head.atom.symbol.name == "formhe_definition_begin":
+                self.in_definition_block = True
+                return None
+            if rule.head.atom.symbol.name == "formhe_definition_end":
+                self.in_definition_block = False
                 return None
         except:
             pass
@@ -82,6 +88,8 @@ class Visitor(clingo.ast.Transformer):
             rule.update(head=self._dispatch(rule.head, in_skip=True, in_head=True), body=self._dispatch(rule.body, in_skip=True, in_head=False))
             return None
         else:
+            if not self.in_definition_block:
+                self.not_skipped.append(rule)
             # rule.update(**self.visit_children(rule))
             rule.update(head=self._dispatch(rule.head, in_head=True), body=self._dispatch(rule.body, in_head=False))
             return rule

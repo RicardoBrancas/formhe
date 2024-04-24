@@ -1,20 +1,14 @@
 #!/usr/bin/env python
 import logging
-import math
 import re
-import traceback
-from collections import Counter
-from itertools import chain
-import random
 
-import clingo.ast
-
-from fl.Combination import CombinationFaultLocalizer
-from fl.Debug import DebugFL
-from formhe.asp.highlithing_visitor import AspHighlithingVisitor, MaxScorer, RuleScoreCalculator
+import bentoml
 from ordered_set import OrderedSet
 
 import runhelper
+from fl.Combination import CombinationFaultLocalizer
+from fl.Debug import DebugFL
+from fl.LLM import LLMFaultLocalizer
 from formhe.asp.instance import Instance
 from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
 from formhe.asp.synthesis.AspInterpreter import AspInterpreter
@@ -23,6 +17,8 @@ from formhe.asp.synthesis.StatementEnumerator import StatementEnumerator
 from formhe.exceptions.parser_exceptions import InstanceParseException, InstanceGroundingException
 from formhe.trinity.z3_enumerator import Z3Enumerator
 from formhe.utils import config
+from repair.llm_repair import LLMRepair
+from repair.ng_repair import NextGenRepair
 
 logger = logging.getLogger('formhe.asp.integrated')
 
@@ -46,7 +42,7 @@ def main():
         exit(-1)
 
     for i, instrumented_ast in enumerate(instance.instrumented_asts):
-        logger.debug('Instrumented program %d:\n%s', i, '\n'.join(str(x) for x in instrumented_ast))
+        logger.debug('Instrumented program %d:\n%s', i, instance.get_program_str(i))
 
     problems_found = False
 
@@ -130,6 +126,22 @@ def main():
         debug_fl = DebugFL(instance)
         mcss = debug_fl.fault_localize()
 
+    runhelper.timer_stop('fault.localization.time')
+
+    if instance.config.selfeval_fix_test:
+        if instance.config.selfeval_fix is not None and instance.config.selfeval_lines is not None:
+            for i, (lines, fix) in enumerate(zip(instance.config.selfeval_lines, instance.config.selfeval_fix)):
+
+                modified_instance = Instance(config.get().input_file, skips=lines, ground_truth_instance=instance.ground_truth)
+                asp_interpreter = AspInterpreter(modified_instance, instance.constantCollector.predicates.keys())
+
+                if not asp_interpreter.test(fix):
+                    logger.error(f"Self-evaluation test {i} failed!")
+                else:
+                    logger.debug(f"Self-evaluation test {i} successful")
+        else:
+            logger.warning('Self-evaluation fix test enabled, but selfeval lines or selfeval fix missing')
+
     predicates_before_skip = instance.constantCollector.predicates
 
     runhelper.log_any('predicates.unsupported', str(set(OrderedSet(predicates_before_skip.keys()) - instance.constantCollector.predicates_generated)))
@@ -144,39 +156,29 @@ def main():
         print()
         print('Suggested lines where bug is likely located:  ')
 
+        program_lines = instance.get_program_lines()
+
         for line in mcss[0]:
-            if not line:
+            if line is None or line >= len(program_lines):
                 continue
-            print(f'**[{line}]**', '`' + instance.instrumenter.original_rules[line] + '`', '  ')
+            print(f'**[{line}]**', '`' + program_lines[line] + '`', '  ')
 
         print()
         print()
 
-
-    runhelper.timer_stop('fault.localization.time')
     if instance.config.exit_after_fault_localization:
-        for i in range(len(instance.asts)):
-            instance.get_control(i=i)
         exit()
 
-    # for a in instance.constantCollector.skipped:
-    #     print(a)
+    ng_repair = NextGenRepair(instance)
+    # with bentoml.SyncHTTPClient(instance.config.llm_url, timeout=600) as client:
+    #     llm_repair = LLMRepair(instance, client)
+    res = ng_repair.repair(mcss, predicates_before_skip)
+    if not res:
+        print('Synthesis Failed')
+        exit(-2)
 
-    # print(preset_atoms[-1])
 
-    # perf.timer_start(perf.ANSWER_SET_ENUM_TIME)
-    # if not config.get().no_semantic_constraints:
-    #     instance.find_wrong_models(max_sols=1000)
-    # instance.generate_correct_models(config.get().n_gt_sols_generated)
-    # perf.timer_stop(perf.ANSWER_SET_ENUM_TIME)
-    #
-    # sorted_cores = sorted(instance.cores, key=len)
-
-    # runhelper.timer_start('answer.set.enum.time')
-    # for i in range(len(instance.instrumented_asts)):
-    #     instance.ground_truth.compute_models(0, i)  # todo this has been done before already
-    # runhelper.timer_stop('answer.set.enum.time')
-
+def repair(instance, mcss, predicates_before_skip):
     solved = False
     first_depth = True
     for depth in range(config.get().minimum_depth, config.get().maximum_depth):
@@ -222,6 +224,7 @@ def main():
                         res = asp_interpreter.test(asp_prog)
                         if res:
                             logger.info('Solution found')
+                            runhelper.log_any('solution', asp_prog)
 
                             print('**Fix Suggestion**\n')
 
@@ -262,7 +265,6 @@ def main():
             break
 
         first_depth = False
-
     if not solved:
         print('Synthesis Failed')
         exit(-2)

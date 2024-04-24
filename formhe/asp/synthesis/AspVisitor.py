@@ -2,6 +2,7 @@ import logging
 import re
 from collections import Counter
 from itertools import chain
+from typing import Union
 
 import clingo.ast
 from multiset import Multiset
@@ -62,7 +63,7 @@ class AspVisitor:
         self.anon_pred_map = {}
         self.anon_pred_count = 0
 
-    def visit(self, ast: clingo.ast.AST, *args, **kwargs) -> Node:
+    def visit(self, ast: clingo.ast.AST, *args, **kwargs) -> Union[Node, tuple[Node, list[Node]]]:
         '''
         Dispatch to a visit method in a base class or visit and transform the
         children of the given AST if it is missing.
@@ -75,9 +76,9 @@ class AspVisitor:
 
     def visit_BooleanConstant(self, boolean_constant):
         if boolean_constant.value == 0:
-            return self.builder.make_enum('Bool', False)
+            return self.builder.make_enum('PBool', False)
         else:
-            return self.builder.make_enum('Bool', True)
+            return self.builder.make_enum('PBool', True)
 
     def visit_SymbolicAtom(self, symbolic_atom):
         return self.visit(symbolic_atom.symbol)
@@ -210,6 +211,8 @@ class AspVisitor:
                 return self.visit(guard.term)
             case clingo.ast.ComparisonOperator.Equal:
                 return self.visit(guard.term)
+            case clingo.ast.ComparisonOperator.GreaterEqual:
+                return self.visit(guard.term)
             case _:
                 raise NotImplementedError()
 
@@ -265,8 +268,10 @@ class AspVisitor:
         else:
             if aggregate.left_guard and aggregate.left_guard.comparison == clingo.ast.ComparisonOperator.LessEqual:
                 left_guard = self.visit(aggregate.left_guard)
-            elif aggregate.left_guard:
-                raise NotImplementedError()
+            elif aggregate.left_guard and aggregate.left_guard.comparison == clingo.ast.ComparisonOperator.GreaterEqual and not aggregate.right_guard:
+                left_guard = self.builder.make_apply('empty', [])
+                right_guard = self.visit(aggregate.left_guard)
+                return left_guard, right_guard
             else:
                 left_guard = self.builder.make_apply('empty', [])
             if aggregate.right_guard and aggregate.right_guard.comparison == clingo.ast.ComparisonOperator.LessEqual:
@@ -293,10 +298,11 @@ class AspVisitor:
         self.anon_var_map = {}
         self.anon_var_count = 0
         if rule.head.ast_type == clingo.ast.ASTType.Literal and rule.head.atom.ast_type == clingo.ast.ASTType.BooleanConstant and rule.head.atom.value == 0:
-            head = None
+            head = self.builder.make_apply('empty', [])
         else:
             head = self.visit(rule.head)
         body = [self.visit(a) for a in rule.body]
+        return self.builder.make_apply('stmt', [head, self.builder.make_apply('and', body)])
         return head, body
 
     def visit_Minimize(self, minimize):
@@ -310,7 +316,10 @@ class AspVisitor:
         return self.builder.make_apply('empty', [])  # todo
 
     def visit_Definition(self, definition):
-        return self.builder.make_apply('empty', [])  # todo
+        return self.builder.make_apply('define', [
+            self.builder.make_enum('Terminal', definition.name),
+            self.visit(definition.value)
+        ])  # todo
 
     def visit_ShowSignature(self, show_signature):
         return self.builder.make_apply('empty', [])  # todo

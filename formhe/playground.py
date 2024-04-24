@@ -1,15 +1,19 @@
-import itertools
+import torch
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
 
-from utils.iterutils import toggleset_add_one_to_base
+torch.set_default_device("cuda")
 
-preset_statements = [('head1', ['body1a', 'body1b']), (None, ['body2a', 'body2b'])]
+quantization_config = BitsAndBytesConfig(load_in_8bit=True)
 
-stmt_combos = []
-for head, body in preset_statements:
-    if head is None:
-        stmt_combos.append([(False, None, body_combo) for body_combo in toggleset_add_one_to_base(body)])
-    else:
-        stmt_combos.append([(True, head_combo, body_combo) for body_combo in toggleset_add_one_to_base(body) for head_combo in [head, None]])
+self.model = AutoModelForSequenceClassification.from_pretrained(basepath / "gemma-2b-it", quantization_config=quantization_config, num_labels=20)
+self.tokenizer = AutoTokenizer.from_pretrained(basepath / "gemma-2b-it")
 
-for combo in itertools.product(*stmt_combos):
-    print(combo)
+chat = [
+    {"role": "user", "content": text},
+]
+prompt = self.tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+inputs = self.tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt").to(self.model.device)
+outputs = self.model.generate(input_ids=inputs, max_new_tokens=512)
+output_text = self.tokenizer.decode(outputs[0])
+chat = reverse_gemma_chat_template(output_text)
+

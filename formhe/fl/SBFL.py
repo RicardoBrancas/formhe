@@ -2,6 +2,7 @@ from itertools import chain
 from typing import List
 
 import clingo.ast
+import runhelper
 from ordered_set import OrderedSet
 
 from fl.FaultLocalizer import FaultLocalizer
@@ -23,6 +24,8 @@ class SBFL(FaultLocalizer):
             clingo.ast.parse_files([config.get().input_file], lambda x: rule_score_calculator.visit(x))
 
             selected_lines = OrderedSet([rule for rule, score in sorted(rule_score_calculator.scorer.get_scores(), key=lambda x: x[1], reverse=True)[:1]])
+
+            runhelper.log_any('fl.sbfl', sorted(rule_score_calculator.scorer.get_scores(), key=lambda x: x[1], reverse=True))
 
             return [selected_lines]
         except:

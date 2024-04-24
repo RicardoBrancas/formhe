@@ -750,7 +750,7 @@ class SmtEnumerator(ABC):
             raise NotImplementedError()
         for stmt in self.statements:
             for node in stmt.nodes:
-                if not node.bound:
+                if not node.bound or type(node).__name__ == 'MutationNode':  # fixme hack
                     self.create_assertion(node.var != prod.id)
 
     def _resolve_is_not_parent_predicate(self, pred):
@@ -780,7 +780,7 @@ class SmtEnumerator(ABC):
         for stmt in self.statements:
             for n in stmt.nodes:
                 # not a leaf node
-                if n.children and not n.bound:
+                if n.children and (not n.bound or type(n).__name__ == 'MutationNode'):
                     ctr_children = []
                     for p in child_pos:
                         if p < len(n.children):

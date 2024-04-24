@@ -1,6 +1,7 @@
 import copy
 import dataclasses
 import logging
+import random
 import re
 import typing
 from functools import cached_property
@@ -8,7 +9,7 @@ from itertools import product
 from pathlib import Path
 
 import clingo.ast
-import utils.clingo
+import formhe.utils.clingo
 from clingo import Control
 from clingo.ast import ASTType
 from ordered_set import OrderedSet
@@ -23,7 +24,16 @@ logger = logging.getLogger('formhe.asp.instance')
 
 class Instance:
 
-    def __init__(self, filename: str = None, ast: clingo.ast.AST = None, skips: list[int] = None, parent_config: config.Config = None, ground_truth_instance=None):
+    def __init__(self,
+                 filename: str = None,
+                 ast: clingo.ast.AST = None,
+                 skips: list[int] = None,
+                 parent_config: config.Config = None,
+                 ground_truth_instance=None,
+                 suppress_override_message=False,
+                 is_groundtruth=False,
+                 shuffle=False,
+                 shuffle_source: random.Random = None):
         if (filename is not None and ast is not None) or (filename is None and ast is None):
             raise ValueError("Need to supply exactly one of {filename, ast}.")
 
@@ -32,6 +42,17 @@ class Instance:
                 self.raw_input = f.read() + '\n'.join(config.stdin_content)
         elif ast is not None:
             self.raw_input = '\n'.join(map(str, ast))
+
+        self.clean_input = []
+        for line in self.raw_input.splitlines():
+            if line.startswith("%formhe-") or line.strip() == "":
+                continue
+            self.clean_input.append(line)
+        if shuffle and shuffle_source is None:
+            random.shuffle(self.clean_input)
+        elif shuffle:
+            shuffle_source.shuffle(self.clean_input)
+        self.clean_input_string = "\n".join(self.clean_input)
 
         if not parent_config:
             self.config = copy.copy(config.get())
@@ -48,7 +69,8 @@ class Instance:
                 compact_matches[key] = value
 
         for key, value in compact_matches.items():
-            logger.info('Overriding local config %s: %s', key, value)
+            if not suppress_override_message:
+                logger.info('Overriding local config %s: %s', key, value)
             field_found = False
             for field in dataclasses.fields(config.Config):
                 if field.name == key:
@@ -75,11 +97,11 @@ class Instance:
                 object.__setattr__(self.config, key, value)
 
         if not self.config.instance_base64:
-            self.inputs = [self.raw_input]
+            self.inputs = [self.clean_input_string]
         else:
             self.inputs = []
             for instance64 in self.config.instance_base64:
-                self.inputs.append(self.raw_input + '\nformhe_definition_begin.\n' + instance64 + '\nformhe_definition_end.')
+                self.inputs.append(self.clean_input_string + '\nformhe_definition_begin.\n' + instance64 + '\nformhe_definition_end.')
 
         self.domain_predicates = OrderedSet()
         if self.config.domain_predicates:
@@ -94,10 +116,10 @@ class Instance:
         self.asts = []
         self.instrumented_asts = []
         try:
-            self.base_ast = utils.clingo.parse_string(self.raw_input)
+            self.base_ast = formhe.utils.clingo.parse_string(self.clean_input_string)
             self.base_ast = iterutils.drop_nones([constantCollector.visit(node) for node in self.base_ast])
             for input in self.inputs:
-                ast = utils.clingo.parse_string(input)
+                ast = formhe.utils.clingo.parse_string(input)
                 self.constantCollector = Visitor(skips)  # TODO only the last instance counts
                 self.asts.append(iterutils.drop_nones([self.constantCollector.visit(copy.copy(node)) for node in ast]))
                 self.instrumenter = Instrumenter()
@@ -109,12 +131,12 @@ class Instance:
         if ground_truth_instance is not None:
             self.ground_truth = ground_truth_instance
             self.has_gt = True
-        elif self.config.groundtruth:
+        elif self.config.groundtruth and not is_groundtruth:
             self.ground_truth_file = Path(filename).resolve().parent / self.config.groundtruth
             self.ground_truth_file = self.ground_truth_file.resolve()
             config_tmp = copy.copy(self.config)
             object.__setattr__(config_tmp, 'groundtruth', None)
-            self.ground_truth = Instance(self.ground_truth_file, parent_config=config_tmp)
+            self.ground_truth = Instance(self.ground_truth_file, parent_config=config_tmp, is_groundtruth=True)
             self.has_gt = True
         else:
             self.has_gt = False
@@ -126,6 +148,36 @@ class Instance:
         self.gt_unsat_models = [OrderedSet() for i in range(len(self.asts))]
         self.models = [OrderedSet() for i in range(len(self.asts))]
         self.controls = [self.get_control(i=i) for i in range(len(self.asts))]
+
+    def get_program_lines(self, input_id: typing.Union[None, int] = None) -> list[str]:
+        from asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
+        from asp.synthesis.AspVisitor import AspVisitor
+        from fl.LLM import ListInterpreter
+
+        if input_id is None:
+            ast = self.base_ast
+        else:
+            ast = self.asts[input_id]
+
+        predicates = self.constantCollector.predicates
+
+        spec_generator = ASPSpecGenerator(self, self.config.extra_vars, predicates.items())
+        trinity_spec = spec_generator.trinity_spec
+        asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars)
+        asp_interpreter = ListInterpreter(self, predicates.keys())
+
+        lines = []
+        for line in ast:
+            try:
+                node = asp_visitor.visit(line)
+                lines.append(asp_interpreter.eval(node))
+            except:
+                lines.append(str(line))
+
+        return [line for line in lines if line != ""]
+
+    def get_program_str(self, input_id: typing.Union[None, int] = None) -> str:
+        return "\n".join(self.get_program_lines(input_id))
 
     def get_control(self, *args, max_sols=0, i=0, instrumented=False, project=False, clingo_args: list = None):
         if clingo_args is None:
@@ -142,9 +194,9 @@ class Instance:
                     bld.add(stm)
             if project:
                 for p in self.domain_predicates:
-                    clingo.ast.parse_string(f'#project {p[0]}/{p[1]}.', bld.add)
+                    clingo.ast.parse_string(f'#project {p[0]}/{p[1]}.', bld.add, logger=lambda x, y: None)
             for arg in args:
-                clingo.ast.parse_string(arg, bld.add)
+                clingo.ast.parse_string(arg, bld.add, logger=lambda x, y: None)
         runhelper.timer_start('grounding.time')
         try:
             ctl.ground([('base', [])])
@@ -286,64 +338,6 @@ class Instance:
 
                 else:
                     raise RuntimeError()
-
-    def all_weak_mcs(self, model, relaxed=False, i=0, positive=False):
-        logger.info(f'Iterating all strong {"relaxed " if relaxed else ""}MCSs')
-
-        instrumenter_vars = self.instrumenter.relaxation_functions
-        mcs_blocks = OrderedSet()
-        mcss = OrderedSet()
-
-        if positive:
-            negated_query = ' '.join([self.mcs_query(m) for m in model])
-        else:
-            negated_query = self.mcs_negated_query(model, relaxed)
-
-        logger.info('Transformed query: %s', negated_query)
-
-        while True:
-            untested_vars = OrderedSet(instrumenter_vars)
-            unsatisfied_vars = OrderedSet()
-            satisfied_vars = OrderedSet()
-            unsat = True
-            while untested_vars:
-                var = untested_vars[0]
-                untested_vars = untested_vars - {var}
-                clause_s = ' '.join(map(lambda x: f'{x}.', satisfied_vars.union({var})))
-                keep_unsats = ' '.join(map(lambda x: f'-{x}.', unsatisfied_vars))
-                clause_choice = '0 { ' + '; '.join(map(str,  OrderedSet(instrumenter_vars) - satisfied_vars.union({var}))) + ' }.'
-                print(clause_s)
-                print(keep_unsats)
-                print(negated_query)
-                for mcs_block in mcs_blocks:
-                    print(mcs_block)
-                print()
-                print()
-                print()
-                # ctl = self.get_control(clause_s, clause_choice, negated_query, *mcs_blocks, max_sols=1, instrumented=True, i=i)
-                ctl = self.get_control(clause_s, keep_unsats, negated_query, *mcs_blocks, max_sols=1, instrumented=True, i=i)
-
-                with ctl.solve(yield_=True) as handle:
-                    res = handle.get()
-
-                    if res.satisfiable:
-                        unsat = False
-                        satisfied_vars.add(var)
-                    elif res.unsatisfiable:
-                        unsatisfied_vars.add(var)
-                    else:
-                        raise RuntimeError()
-
-            if not unsat:
-                yield frozenset(self.instrumenter.relaxations_function_map[var] for var in unsatisfied_vars)
-                mcss.append(frozenset(unsatisfied_vars))
-                logger.info(' '.join(str(x) for x in unsatisfied_vars))
-                clause_r = ''
-                mcs_block = ''
-                mcs_blocks.append('1 { ' + '; '.join(map(str, unsatisfied_vars)) + ' }.')
-                unsat = True
-            else:
-                return
 
     def all_min_mcs(self, model, relaxed=False, i=0, positive=False):
         logger.info(f'Iterating all {"relaxed " if relaxed else ""}min MCSs')
@@ -592,8 +586,6 @@ class Instance:
                 logger.debug(impl_lines[b])
                 logger.debug(costs[a, b])
                 pairings_with_cost.append((a, b, costs[a, b]))
-
-            runhelper.log_any('pairings', pairings_with_cost)
 
             return pairings_with_cost
         except Exception as e:

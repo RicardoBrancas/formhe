@@ -1,13 +1,32 @@
 import argparse
+import ast
 import base64
 import logging
 import os
+import re
 import sys
 import fcntl
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, List, Tuple
 
 from argparse_dataclass import ArgumentParser
+
+
+def parse_selfeval_lines(s: str) -> Tuple[Tuple[int, ...], ...]:
+    if s.strip() == '':
+        return ((),)
+    if ',' in s:
+        elems_s = re.findall(r'\((.*?)\)', s)
+        return tuple(ast.literal_eval('(' + e + ',)') for e in elems_s)
+    else:
+        return (tuple(map(int, s.split())),)
+
+
+def parse_selfeval_fix(s: str) -> Tuple[str, ...]:
+    if '"' in s:
+        return ast.literal_eval('(' + s + ')')
+    else:
+        return (s,)
 
 
 @dataclass(frozen=True)
@@ -31,6 +50,12 @@ class Config:
     print_only_first_test_case: bool = False
     external_fl: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
 
+    # llm
+    llm_url: str = "http://localhost:3000"
+    llm_timeout: int = 300
+    fl_prompt_version: int = 2
+    repair_prompt_version: int = 1
+
     # predicates
     disable_commutative_predicate: bool = False
     disable_distinct_args_predicate: bool = False
@@ -46,26 +71,30 @@ class Config:
     # parameters
     minimum_depth: int = 2
     maximum_depth: int = 5
+    minimum_mutations: int = 1
+    maximum_mutations: int = 5
     bandit_starting_epsilon: float = 1
     bandit_epsilon_multiplier: float = 0.9999
     bandit_exploration_count: int = 5000
     extra_vars: int = 2
     skip_mcs_negative_non_relaxed: bool = False
     skip_mcs_negative_relaxed: bool = False
-    use_mcs_strong_negative_non_relaxed: bool = False # TODO fix me misleading names
-    use_mcs_strong_negative_relaxed: bool = False
     use_mcs_positive: bool = False
+    skip_mcs_positive_conditional: bool = False
     use_mfl: bool = False
     skip_mcs_line_pairings: bool = False
     enable_arithmetic: bool = False
     disable_classical_negation: bool = False
     use_sbfl: bool = False
-    mcs_sorting_method: str = field(metadata=dict(choices=['hit-count', 'hit-count-normalized', 'hit-count-smallest', 'random', 'random-smallest', 'none', 'none-smallest']), default='none-smallest')
+    mcs_sorting_method: str = field(metadata=dict(choices=['hit-count', 'hit-count-avg', 'hit-count-normalized', 'hit-count-smallest', 'random', 'random-smallest', 'none', 'none-smallest']), default='hit-count')
+    disable_mutation_node_expansion: bool = False
+    skip_llm_fl: bool = False
 
     # heuristics
+    line_matching_threshold: int = 3
 
     # evaluation
-    selfeval_lines: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
+    selfeval_lines: tuple[tuple[int]] = field(metadata=dict(type=parse_selfeval_lines), default=None)
     selfeval_deleted_lines: int = None
     selfeval_changes_generate: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
     selfeval_changes_generate_n: int = None
@@ -75,11 +104,12 @@ class Config:
     selfeval_changes_test_n_unique: int = None
     simulate_fault_localization: bool = False
     selfeval_fix_test: bool = False
-    selfeval_fix: str = None
+    selfeval_fix: tuple[str] = field(metadata=dict(type=parse_selfeval_fix), default=None)
 
 
 parser = ArgumentParser(Config, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-_config: Config = parser.parse_args()
+res = parser.parse_known_args()
+_config: Config = res[0]
 
 if _config.drop_stderr:
     f = open(os.devnull, 'w')

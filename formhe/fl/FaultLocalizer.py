@@ -20,41 +20,16 @@ class FaultLocalizer(Generic[FaultType]):
         raise NotImplementedError()
 
     def sort(self, fls: List[FaultType]) -> List[FaultType]:
-        runhelper.log_any('mcss', [set(fl) for fl in fls])
-        if hasattr(self, 'mcs_hit_counter'):
-            mcs_hit_counter = self.mcs_hit_counter
-        else:
-            mcs_hit_counter = None  # todo there is a better way to do this for sure
-        runhelper.log_any('mcss.hit.count', mcs_hit_counter)
-        match self.instance.config.mcs_sorting_method:
-            case 'none':
-                mcss_sorted = list(map(set, fls))
-            case 'none-smallest':
-                mcss_sorted = list(map(set, sorted(fls, key=lambda mcs: len(mcs) if len(mcs) != 0 else math.inf)))
-            case 'hit-count':
-                mcss_sorted = list(map(set, sorted(fls, key=lambda mcs: sum(map(lambda rule: mcs_hit_counter[rule], mcs)), reverse=True)))
-            case 'hit-count-normalized':
-                mcss_sorted = list(map(set, sorted(fls, key=lambda mcs: sum(map(lambda rule: mcs_hit_counter[rule], mcs)) / len(mcs) if len(mcs) != 0 else math.inf, reverse=True)))
-            case 'hit-count-smallest':
-                mcss_sorted = list(map(set, sorted(fls, key=lambda mcs: (-len(mcs) if len(mcs) != 0 else -math.inf, sum(map(lambda rule: mcs_hit_counter[rule], mcs))), reverse=True)))
-            case 'random':
-                random_instance = random.Random(self.instance.config.seed)
-                mcss_sorted = list(map(set, sorted(fls, key=lambda mcs: random_instance.random())))
-            case 'random-smallest':
-                random_instance = random.Random(self.instance.config.seed)
-                mcss_sorted = list(map(set, sorted(fls, key=lambda mcs: (len(mcs) if len(mcs) != 0 else math.inf, random_instance.random()))))
-            case _:
-                raise NotImplementedError(f'Unrecognized MCS sorting method {self.instance.config.mcs_sorting_method}')
-
-        return mcss_sorted
+        raise NotImplementedError()
 
     def report(self, sorted_fls: List[FaultType]):
         if self.instance.config.selfeval_lines is not None:
             mcs_union = set().union(*sorted_fls)
-            faulty_lines = set(self.instance.config.selfeval_lines)
-            runhelper.log_any('mcss.sorted', sorted_fls)
-            runhelper.log_any('mcss.union', mcs_union)
+            faulty_lines = set(self.instance.config.selfeval_lines[0])  # todo
+            runhelper.log_any('fl.union', mcs_union)
             runhelper.log_any('selfeval.lines', faulty_lines)
+            if self.instance.config.selfeval_fix is not None:
+                runhelper.log_any('selfeval.fix', self.instance.config.selfeval_fix)
             runhelper.log_any('selfeval.deleted.lines', self.instance.config.selfeval_deleted_lines)
             runhelper.log_any('selfeval.changes.generate', self.instance.config.selfeval_changes_generate)
             runhelper.log_any('selfeval.changes.generate.n', self.instance.config.selfeval_changes_generate_n)
@@ -98,13 +73,14 @@ class FaultLocalizer(Generic[FaultType]):
             else:
                 runhelper.log_any('fault.identified', 'Wrong (wrong lines identified)')
 
-            if len(self.instance.config.selfeval_lines) > 0 and self.instance.config.selfeval_fix_test and self.instance.config.selfeval_fix is not None:
-                spec_generator = ASPSpecGenerator(self.instance.ground_truth, 0, self.instance.constantCollector.predicates.items())
-                trinity_spec = spec_generator.trinity_spec
-                asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars)
-                asp_interpreter = AspInterpreter(self.instance, self.instance.constantCollector.predicates.keys())
-
-                if asp_interpreter.test(self.instance.config.selfeval_fix):
-                    runhelper.log_any('fault.partial', 'Yes')
-                else:
-                    runhelper.log_any('fault.partial', 'No')
+            if self.instance.config.selfeval_lines is not None and self.instance.config.selfeval_fix is not None:
+                partial_results = []
+                for i, (lines, fix) in enumerate(zip(self.instance.config.selfeval_lines, self.instance.config.selfeval_fix)):
+                    if len(lines) > 0 and fix is not None:
+                        asp_interpreter = AspInterpreter(self.instance, self.instance.constantCollector.predicates.keys())
+                        if asp_interpreter.test(fix):
+                            partial_results.append('Yes')
+                        else:
+                            partial_results.append('No')
+                if len(partial_results) > 0:
+                    runhelper.log_any('fault.partial', partial_results)

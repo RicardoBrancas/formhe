@@ -65,16 +65,16 @@ class AspInterpreter(PostOrderInterpreter):
         return f'{name}({", ".join(args)})'
 
     def eval_and(self, node, args):
-        return ', '.join(args)
+        return ', '.join([arg for arg in args if arg.strip() != ""])
 
     def eval_and_(self, node, args):
-        return ', '.join(args)
+        return ', '.join([arg for arg in args if arg.strip() != ""])
 
     def eval_pool(self, node, args):
-        return '; '.join(args)
+        return '; '.join([arg for arg in args if arg.strip() != ""])
 
     def eval_stmt_and(self, node, args):
-        return ' '.join(args)
+        return ' '.join([arg for arg in args if arg.strip() != ""])
 
     def eval_eq(self, node, args):
         return args[0] + ' == ' + args[1]
@@ -110,6 +110,8 @@ class AspInterpreter(PostOrderInterpreter):
         return '(' + ', '.join(args) + ')'
 
     def eval_stmt(self, node, args):
+        if not args[0] and not args[1]:
+            return ""
         if args[1]:
             return args[0] + ' :- ' + args[1] + '.'
         else:
@@ -129,6 +131,9 @@ class AspInterpreter(PostOrderInterpreter):
 
     def eval_empty(self, node, args):
         return ''
+
+    def eval_define(self, node, args):
+        return f'#const {args[0]} = {args[1]}.'
 
     def eval_PBool(self, value):
         if value:

@@ -1,20 +1,10 @@
 library('devEMF')
 
-# options(tikzDefaultEngine = 'pdftex',
-#         tikzLatexPackages = c(
-#           getOption("tikzLatexPackages"),
-#           "\\RequirePackage[T1]{fontenc}\n",
-#           "\\RequirePackage[tt=false, type1=true]{libertine}\n",
-#           "\\RequirePackage[varqu]{zi4}\n",
-#           "\\RequirePackage[libertine]{newtxmath}\n"
-#         ),
-#         tikzMetricsDictionary = './metrics_cache_acm',
-#         standAlone = T)
 options(tikzDefaultEngine = 'pdftex',
         tikzLatexPackages = c(
           getOption("tikzLatexPackages"),
           "\\RequirePackage[T1]{fontenc}\n",
-          "\\usepackage[sfdefault]{notomath}\n"
+          "\\RequirePackage{lmodern}\n"
         ),
         tikzMetricsDictionary = './metrics_cache_thesis',
         standAlone = T)
@@ -67,7 +57,7 @@ plot_emf <- function(filename, width, height, plot) {
   dev.off()
 }
 
-ibm_colors <- c("#fe6100", "#dc267f", "#785ef0", "#648fff", "#ffb000")
+ibm_colors <- c("#dc267f", "#fe6100", "#785ef0", "#648fff", "#ffb000")
 
 ibm_palette <- function(n) {
   if (missing(n)) {
@@ -141,41 +131,78 @@ times_boxplot <- function(..., all = F, angle = 0) {
     my_theme()
 }
 
-times_inverse_cactus <- function(..., all = F, angle = 0) {
+vbs <- function(..., timelimit = 600) {
   runs <- list(...)
   data <- bind_rows(runs, .id = 'run')
+  t <- data %>%
+    group_by(instance) %>%
+    summarise(real = min(ifelse(feedback_type == 'Synthesis Success', real, timelimit)),
+              cpu = min(ifelse(feedback_type == 'Synthesis Success', cpu, timelimit)),
+              feedback_type = case_when(any(feedback_type == "Synthesis Success") ~ "Synthesis Success",
+                                        .default = 'Fail')
+    )
+  t %>% mutate(run = 'VBS')
+}
+
+pick <- function(condition) {
+  function(d) d %>% filter_(condition)
+}
+
+times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, every_other = 50, get_data = F, get_data_cutoff = NA) {
+  runs <- list2(...)
+  data <- bind_rows(runs, .id = 'run')
+  if (use_vbs) {
+    data <- data %>% bind_rows(vbs(...))
+  }
   if (!all) {
     data <- data %>%
       filter(feedback_type != 'Solution OK' &
                feedback_type != 'Parsing Error' &
                feedback_type != 'Grounding Error')
   }
-  num_instances <- n_distinct(data$instance)
-  data %>%
+  if (!is.null(filter_f)) {
+    data <- data %>% filter(filter_f(instance))
+  }
+  tmp <- data %>%
     mutate(feedback_type = case_when(feedback_type == 'Other' ~ 'Failed',
                                      TRUE ~ feedback_type),
            feedback_type = factor(feedback_type),
            feedback_type = fct_relevel(feedback_type, c('Synthesis Success', 'Timeout', 'Failed'))) %>%
     arrange(real) %>%
     group_by(run) %>%
-    mutate(val = cumsum(feedback_type == 'Synthesis Success') / num_instances) %>%
+    # mutate(val = cumsum(feedback_type == 'Synthesis Success')) %>%
+    mutate(val = cumsum(feedback_type == 'Synthesis Success') / n_distinct(instance)) %>%
     mutate(id = row_number()) %>%
-    ungroup() %>%
-    filter(feedback_type == 'Synthesis Success') %>%
-    ggplot(aes(y = val, x = real, color = factor(run, levels = names(runs)), shape = factor(run, levels = names(runs)))) +
-    geom_point() +
+    ungroup()
+  if (get_data) {
+    tmp <- tmp %>%
+      group_by(run) %>%
+      mutate(instance_count = n_distinct(instance)) %>%
+      ungroup()
+    if (!is.na(get_data_cutoff)) {
+      tmp <- tmp %>% filter(real <= get_data_cutoff)
+    }
+    tmp <- tmp %>%
+      group_by(run, solved) %>%
+      summarise(n = n() / first(instance_count))
+    return(tmp)
+  }
+  tmp <- tmp %>% filter(feedback_type == 'Synthesis Success')
+  tmp %>% ggplot(aes(y = val, x = real, color = factor(run, levels = c(names(runs), "VBS")), shape = factor(run, levels = c(names(runs), "VBS")))) +
+    geom_point(data = function(d) { d %>% filter(id %% every_other == 0 & run == "Synthetic Instances" | run == "Real Instances") }) +
     geom_line() +
     scale_color_ibm() +
     annotation_logticks(sides = 'b') +
     scale_x_continuous(trans = log_trans(10), breaks = c(5, 10, 30, 60, 180, 600)) +
+    # scale_y_continuous(breaks = extended_breaks(n = 6)) +
     scale_y_continuous(breaks = extended_breaks(n = 6), labels = label_percent(accuracy = 1, suffix = '\\%')) +
     labs(y = '\\% Instances Repaired', x = 'Time (s)') +
     # coord_polar("y", start = 0) +
     my_theme()
 }
 
-fault_identified_plot <- function(..., all = F, full = F, drop_zero_incorrect_lines = F, angle = 0, reduced_labels = T, get_data = F) {
-  runs <- list(...)
+fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrect_lines = F, angle = 0, reduced_labels = T, get_data = F, pattern = F, filter_f = NULL, wrap_width = 15) {
+  runs <- list2(...)
   data <- bind_rows(runs, .id = 'run')
   if (!all) {
     data <- data %>%
@@ -183,55 +210,8 @@ fault_identified_plot <- function(..., all = F, full = F, drop_zero_incorrect_li
                feedback_type != 'Parsing Error' &
                feedback_type != 'Grounding Error')
   }
-  if (reduced_labels) {
-    data <- data %>%
-      mutate(fault.identified = case_when(fault.identified == 'Yes (no incorrect lines)' ~ 'Yes',
-                                          fault.identified == 'Yes (first MCS)' ~ 'Yes',
-                                          fault.identified == 'No (wrong lines identified)' ~ 'Wrong',
-                                          fault.identified == 'No (no incorrect lines)' ~ 'Wrong',
-                                          startsWith(fault.identified, 'No') ~ 'No',
-                                          is.na(fault.identified) ~ 'No',
-                                          TRUE ~ fault.identified),
-             fault.identified = factor(fault.identified, levels = c('Yes', 'Yes (not first MCS)', 'Subset', 'Superset', 'No', 'Wrong')))
-  } else {
-    data <- data %>% mutate(fault.identified = factor(fault.identified, levels = c('Yes', 'Yes (no incorrect lines)', 'Yes (first MCS)', 'Yes (not first MCS)', 'Subset', 'Superset', 'No (no lines identified)', 'No (no incorrect lines)', 'No (wrong lines identified)')))
-  }
-
-  if (drop_zero_incorrect_lines) {
-    data <- data %>% filter(selfeval.lines != 'set()')
-  }
-  if (get_data) {
-    return(data %>%
-             group_by(factor(run, levels = names(runs)), fault.identified) %>%
-             count() %>%
-             pivot_wider(names_from = fault.identified, values_from = n))
-  }
-  if (full) {
-    tmp <- data %>%
-      ggplot(aes(x = factor(run, levels = names(runs)), fill = fault.identified.full))
-  } else {
-    tmp <- data %>%
-      ggplot(aes(x = factor(run, levels = names(runs)), fill = fault.identified))
-  }
-  tmp +
-    geom_bar(position = position_stack(reverse = TRUE)) +
-    scale_x_discrete(guide = guide_axis(angle = angle)) +
-    scale_fill_ibm() +
-    labs(y = '\\# Instances', x = NULL, fill = 'Fault Identified?') +
-    # coord_polar("y", start = 0) +
-    my_theme() +
-    theme(legend.title = element_text(size = rel(1), colour = "#000000", face = "plain"), legend.position = 'right') +
-    guides(fill = guide_legend())
-}
-
-fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrect_lines = F, angle = 0, reduced_labels = T, get_data = F, pattern = F) {
-  runs <- list(...)
-  data <- bind_rows(runs, .id = 'run')
-  if (!all) {
-    data <- data %>%
-      filter(feedback_type != 'Solution OK' &
-               feedback_type != 'Parsing Error' &
-               feedback_type != 'Grounding Error')
+  if (!is.null(filter_f)) {
+    data <- data %>% filter(filter_f(instance))
   }
   if (reduced_labels) {
     data <- data %>%
@@ -244,15 +224,15 @@ fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrec
                                           is.na(fault.identified) ~ 'Fault Not Identified',
                                           fault.identified == 'Subset (first MCS)' ~ 'Some Faults Identified',
                                           fault.identified == 'Subset (not first MCS)' ~ 'Wrong Identification',
-                                          fault.identified == 'Superset (first MCS)' ~ 'Some Faults Identified',
+                                          fault.identified == 'Superset (first MCS)' ~ 'Superset Faults Identified',
                                           fault.identified == 'Superset (not first MCS)' ~ 'Wrong Identification',
                                           fault.identified == 'Not Disjoint (first MCS)' ~ 'Some Faults Identified',
                                           fault.identified == 'Not Disjoint (not first MCS)' ~ 'Wrong Identification',
                                           TRUE ~ fault.identified),
-             fault.identified = factor(fault.identified, levels = c('All Faults Identified', 'Some Faults Identified', 'Fault Not Identified', 'Wrong Identification')))
+             fault.identified = factor(fault.identified, levels = c('All Faults Identified', 'Superset Faults Identified', 'Some Faults Identified', 'Fault Not Identified', 'Wrong Identification')))
   } else {
-    data <- data %>% mutate(fault.identified = factor(fault.identified, levels = c('Yes (no incorrect lines)', 'Yes (first MCS)', 'Yes (not first MCS)', 'Subset (first MCS)',
-                                                                                   'Superset (first MCS)', 'Not Disjoint (first MCS)', 'Subset (not first MCS)', 'Superset (not first MCS)',
+    data <- data %>% mutate(fault.identified = factor(fault.identified, levels = c('Yes (no incorrect lines)', 'Yes (first MCS)', 'Yes (not first MCS)',
+                                                                                   'Superset (first MCS)', 'Subset (first MCS)', 'Not Disjoint (first MCS)', 'Superset (not first MCS)', 'Subset (not first MCS)',
                                                                                    'Not Disjoint (not first MCS)', 'No (no lines identified)', 'Wrong (no incorrect lines)', 'Wrong (wrong lines identified)')))
   }
 
@@ -284,18 +264,18 @@ fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrec
       ggplot(aes(x = factor(run, levels = names(runs)), fill = fault.identified))
   }
   if (pattern) {
-    tmp <- tmp + geom_bar_pattern(aes(pattern=fault.identified, pattern_angle = fault.identified, pattern_fill=fault.identified), pattern_colour=NA, position = position_stack(reverse = TRUE))
+    tmp <- tmp + geom_bar_pattern(aes(pattern = fault.identified, pattern_angle = fault.identified, pattern_fill = fault.identified), pattern_colour = NA, position = position_stack(reverse = TRUE))
   } else {
     tmp <- tmp + geom_bar(position = position_stack(reverse = TRUE))
   }
   tmp +
-    scale_x_discrete(guide = guide_axis(angle = angle)) +
+    scale_x_discrete(guide = guide_axis(angle = angle), labels = label_wrap(wrap_width)) +
     scale_fill_ibm() +
     labs(y = '\\# Instances', x = NULL, fill = 'Fault Identified?', pattern = 'Fault Identified?', pattern_angle = 'Fault Identified?', pattern_fill = 'Fault Identified?') +
     # coord_polar("y", start = 0) +
     my_theme() +
     theme(legend.title = element_text(size = rel(1), colour = "#000000", face = "plain"), legend.position = 'right') +
-    guides(fill = guide_legend(), pattern=guide_legend())
+    guides(fill = guide_legend(), pattern = guide_legend())
 }
 
 fault_identified_grid <- function(data, all = F) {
@@ -325,23 +305,36 @@ fault_identified_grid <- function(data, all = F) {
     theme(legend.position = 'none')
 }
 
-
-feedback_fault_grid <- function(data, all = F, full = F) {
+feedback_fault_grid_new <- function(data, all = F, full = F, reduced_labels = T) {
   if (!all) {
     data <- data %>%
       filter(feedback_type != 'Solution OK' &
                feedback_type != 'Parsing Error' &
                feedback_type != 'Grounding Error')
   }
-  data <- data %>%
-    mutate(fault.identified = case_when(fault.identified == 'Yes (no incorrect lines)' ~ 'Yes',
-                                        fault.identified == 'Yes (first MCS)' ~ 'Yes',
-                                        startsWith(fault.identified, 'No') ~ 'No',
-                                        TRUE ~ fault.identified),
-           fault.identified = factor(fault.identified),
-           fault.identified = fct_relevel(fault.identified, c('Yes', 'Yes (not first MCS)', 'Subset', 'Superset', 'No')),
-           feedback_type = case_when(feedback_type == 'Synthesis Success' ~ 'Repair Success',
-                                     TRUE ~ feedback_type))
+  total_instances <- (data %>% tally())[[1]]
+  if (reduced_labels) {
+    data <- data %>%
+      mutate(fault.identified = case_when(fault.identified == 'Yes (no incorrect lines)' ~ 'All Faults Identified',
+                                          fault.identified == 'Yes (first MCS)' ~ 'All Faults Identified',
+                                          fault.identified == 'Yes (not first MCS)' ~ 'Wrong Identification',
+                                          fault.identified == 'Wrong (wrong lines identified)' ~ 'Wrong Identification',
+                                          fault.identified == 'Wrong (no incorrect lines)' ~ 'Wrong Identification',
+                                          fault.identified == 'No (no lines identified)' ~ 'Fault Not Identified',
+                                          is.na(fault.identified) ~ 'Fault Not Identified',
+                                          fault.identified == 'Subset (first MCS)' ~ 'Some Faults Identified',
+                                          fault.identified == 'Subset (not first MCS)' ~ 'Wrong Identification',
+                                          fault.identified == 'Superset (first MCS)' ~ 'Superset Faults Identified',
+                                          fault.identified == 'Superset (not first MCS)' ~ 'Wrong Identification',
+                                          fault.identified == 'Not Disjoint (first MCS)' ~ 'Some Faults Identified',
+                                          fault.identified == 'Not Disjoint (not first MCS)' ~ 'Wrong Identification',
+                                          TRUE ~ fault.identified),
+             fault.identified = factor(fault.identified, levels = c('All Faults Identified', 'Superset Faults Identified', 'Some Faults Identified', 'Fault Not Identified', 'Wrong Identification')))
+  } else {
+    data <- data %>% mutate(fault.identified = factor(fault.identified, levels = c('Yes (no incorrect lines)', 'Yes (first MCS)', 'Yes (not first MCS)',
+                                                                                   'Superset (first MCS)', 'Subset (first MCS)', 'Not Disjoint (first MCS)', 'Superset (not first MCS)', 'Subset (not first MCS)',
+                                                                                   'Not Disjoint (not first MCS)', 'No (no lines identified)', 'Wrong (no incorrect lines)', 'Wrong (wrong lines identified)')))
+  }
   if (full) {
     tmp <- data %>%
       ggplot(aes(x = fault.identified.full, y = feedback_type))
@@ -351,7 +344,7 @@ feedback_fault_grid <- function(data, all = F, full = F) {
   }
   tmp +
     geom_bin2d() +
-    stat_bin2d(geom = "text", aes(label = ..count..)) +
+    stat_bin2d(geom = "text", aes(label = scales::percent(..count.. / total_instances))) +
     scale_x_discrete(guide = guide_axis(angle = 30)) +
     scale_fill_gradient(low = "white", high = ibm_colors[[1]], limits = c(0, NA)) +
     my_theme() +
@@ -359,43 +352,18 @@ feedback_fault_grid <- function(data, all = F, full = F) {
     theme(legend.position = 'none')
 }
 
-feedback_fault_grid_new <- function(data, all = F, full = F) {
-  if (!all) {
-    data <- data %>%
-      filter(feedback_type != 'Solution OK' &
-               feedback_type != 'Parsing Error' &
-               feedback_type != 'Grounding Error')
-  }
+detailed_times_boxplot <- function(..., percentage = F) {
+  runs <- list(...)
+  data <- bind_rows(runs, .id = 'run')
   data <- data %>%
-    mutate(fault.identified = case_when(fault.identified == 'Yes (no incorrect lines)' ~ 'All faults identified',
-                                        fault.identified == 'Yes (first MCS)' ~ 'All faults identified',
-                                        fault.identified == 'Yes (not first MCS)' ~ 'Wrong Identification',
-                                        fault.identified == 'Wrong (wrong lines identified)' ~ 'Wrong Identification',
-                                        fault.identified == 'Wrong (no incorrect lines)' ~ 'Wrong Identification',
-                                        fault.identified == 'No (no lines identified)' ~ 'Fault Not Identified',
-                                        is.na(fault.identified) ~ 'Fault Not Identified',
-                                        fault.identified == 'Subset (first MCS)' ~ 'Some faults identified',
-                                        fault.identified == 'Subset (not first MCS)' ~ 'Wrong Identification',
-                                        fault.identified == 'Superset (first MCS)' ~ 'Some faults identified',
-                                        fault.identified == 'Superset (not first MCS)' ~ 'Wrong Identification',
-                                        fault.identified == 'Not Disjoint (first MCS)' ~ 'Some faults identified',
-                                        fault.identified == 'Not Disjoint (not first MCS)' ~ 'Wrong Identification',
-                                        TRUE ~ fault.identified),
-           fault.identified = factor(fault.identified, levels = c('All faults identified', 'Some faults identified', 'Fault Not Identified', 'Wrong Identification')),
-           feedback_type = case_when(feedback_type == 'Synthesis Success' ~ 'Repair Success', TRUE ~ feedback_type))
-  if (full) {
-    tmp <- data %>%
-      ggplot(aes(x = fault.identified.full, y = feedback_type))
+    pivot_longer(cols = contains(".time"), names_to = "time.name", values_to = "time")
+  if (!percentage) {
+    tmp <- data %>% ggplot(aes(y = time, x = time.name))
   } else {
-    tmp <- data %>%
-      ggplot(aes(x = fault.identified, y = feedback_type))
+    tmp <- data %>% ggplot(aes(y = time / real, x = time.name))
   }
   tmp +
-    geom_bin2d() +
-    stat_bin2d(geom = "text", aes(label = ..count..)) +
-    scale_x_discrete(guide = guide_axis(angle = 30)) +
-    scale_fill_gradient(low = "white", high = ibm_colors[[1]], limits = c(0, NA)) +
-    my_theme() +
-    labs(y = 'Outcome', x = 'Fault identitifed?') +
-    theme(legend.position = 'none')
+    geom_boxplot() +
+    facet_wrap(~run) +
+    scale_x_discrete(guide = guide_axis(angle = 45))
 }
