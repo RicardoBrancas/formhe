@@ -29,9 +29,12 @@ my_theme <- function(base_size = 9, base_family = "sans") {
     strip.background = element_rect(colour = NA, fill = NA),
     axis.title = element_text(face = "plain", colour = dkgray2, size = rel(1)),
     axis.text = element_text(face = "plain", colour = dkgray, size = rel(.9)),
-    axis.line = element_line(colour = "black"), axis.line.y = element_blank(),
-    axis.ticks = element_blank(), panel.grid.major = element_line(colour = ltgray),
-    panel.grid.minor = element_blank(), legend.background = element_rect(colour = NA),
+    axis.line = element_line(colour = "black"),
+    axis.line.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major = element_line(colour = ltgray),
+    panel.grid.minor = element_blank(),
+    legend.background = element_rect(colour = NA),
     legend.text = element_text(size = rel(1), colour = dkgray),
     # legend.title = element_text(size = rel(1), colour = dkgray2, face = "plain"),
     legend.key = element_rect_round(color = NA, radius = unit(0.4, "snpc")),
@@ -148,7 +151,7 @@ pick <- function(condition) {
   function(d) d %>% filter_(condition)
 }
 
-times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, every_other = 50, get_data = F, get_data_cutoff = NA) {
+times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, every_other = 50, get_data = F, get_data_cutoff = NA, facet_vars = NULL) {
   runs <- list2(...)
   data <- bind_rows(runs, .id = 'run')
   if (use_vbs) {
@@ -170,6 +173,7 @@ times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, eve
            feedback_type = fct_relevel(feedback_type, c('Synthesis Success', 'Timeout', 'Failed'))) %>%
     arrange(real) %>%
     group_by(run) %>%
+    group_by_at({ { facet_vars } }, .add = TRUE) %>%
     # mutate(val = cumsum(feedback_type == 'Synthesis Success')) %>%
     mutate(val = cumsum(feedback_type == 'Synthesis Success') / n_distinct(instance)) %>%
     mutate(id = row_number()) %>%
@@ -188,17 +192,20 @@ times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, eve
     return(tmp)
   }
   tmp <- tmp %>% filter(feedback_type == 'Synthesis Success')
-  tmp %>% ggplot(aes(y = val, x = real, color = factor(run, levels = c(names(runs), "VBS")), shape = factor(run, levels = c(names(runs), "VBS")))) +
+  tmp <- tmp %>% ggplot(aes(y = val, x = real, color = factor(run, levels = c(names(runs), "VBS")), shape = factor(run, levels = c(names(runs), "VBS")))) +
     geom_point(data = function(d) { d %>% filter(id %% every_other == 0 & run == "Synthetic Instances" | run == "Real Instances") }) +
     geom_line() +
     scale_color_ibm() +
-    annotation_logticks(sides = 'b') +
-    scale_x_continuous(trans = log_trans(10), breaks = c(5, 10, 30, 60, 180, 600)) +
+    scale_x_continuous(trans = "log10", breaks = c(5, 10, 30, 60, 180, 600), guide = guide_axis_logticks(long = 2, mid = 1, short = 0.5)) +
     # scale_y_continuous(breaks = extended_breaks(n = 6)) +
     scale_y_continuous(breaks = extended_breaks(n = 6), labels = label_percent(accuracy = 1, suffix = '\\%')) +
     labs(y = '\\% Instances Repaired', x = 'Time (s)') +
     # coord_polar("y", start = 0) +
     my_theme()
+  if (!is.null(facet_vars)) {
+    tmp <- tmp + facet_wrap({ { facet_vars } }, scales = "free_y", labeller = label_both)
+  }
+  tmp
 }
 
 fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrect_lines = F, angle = 0, reduced_labels = T, get_data = F, pattern = F, filter_f = NULL, facet_vars = NULL, wrap_width = 15) {
@@ -269,7 +276,7 @@ fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrec
     tmp <- tmp + geom_bar(position = position_stack(reverse = TRUE))
   }
   if (!is.null(facet_vars)) {
-    tmp <- tmp + facet_wrap({{facet_vars}}, scales="free_y", labeller = label_both)
+    tmp <- tmp + facet_wrap({ { facet_vars } }, scales = "free_y", labeller = label_both)
   }
   tmp +
     scale_x_discrete(guide = guide_axis(angle = angle), labels = label_wrap(wrap_width)) +

@@ -39,22 +39,22 @@ r1061 <- read_data('1061') # simulated fl + gemma repair
 r1062 <- read_data('1062') # fl-only (normal fl + llama 3 8B)
 r1063 <- read_data('1063') # fl-only (llama 3 8B)
 r1064 <- read_data('1064') # fl-only (mistral 7b)
+r1065 <- read_data('1065') # fl-only (codellama 7b 2)
+r1066 <- read_data('1066') # fl-only (normal fl + mistral 7B)
 
 source('analysis/plots.R')
 
-fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Llama 3 8B FL)' = r1062)
-fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Llama 3 8B FL)' = r1062, facet_vars = vars(public, synthetic))
+fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062)
+fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062,  facet_vars = vars(public, synthetic))
+fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062,  facet_vars = vars(synthetic))
+
 fault_identified_plot_new('Phi 2' = r1054, 'StarCoder 2 3B' = r1055, 'Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064)
 fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(public, synthetic))
+fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(synthetic))
 
 times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059)
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { !str_starts(x, "mooshak") })
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { str_starts(x, "mooshak") })
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { str_starts(x, "mooshak") })
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { str_starts(x, "mooshak/") })
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { str_starts(x, "mooshak_") })
-
-fault_identified_plot_new('Sketch-based enum' = r195, "Mutation-based enum" = r207, "Mutation-based enum w/ LLM FL" = r210, "New Dataset" = r213, filter_f = function(x) { str_starts(x, "mooshak") })
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, facet_vars = vars(public, synthetic))
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, facet_vars = vars(synthetic))
 
 inner_join(r221, r1058, by = 'instance') %>% ggplot(aes(x = real.x, y = real.y)) +
   geom_point() +
