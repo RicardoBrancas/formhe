@@ -1,7 +1,5 @@
 # FormHe
 
-Artifact link: https://doi.org/10.6084/m9.figshare.24297760
-
 ## Repository Contents
 
 - `formhe` contains the main source code for FormHe
@@ -18,12 +16,27 @@ You can install all dependencies by running:
 
     pip install .
 
+### Setup for LLM-based FL
+
+Using the LLM based fault localization requires a valid installation of `pytorch` with the packages `peft`, `flash-attn` and `bentoml`.
+
+The LLM server must be launched before running FormHe using the following command in the `formhe/formhe` folder:
+
+    python -m bentoml serve bento-server:FormHeLLM
+
+The LLM server can be run in a different machine than Formhe.
+If that is the case, you can point FormHe to the server using the following argument:
+
+    python formhe/asp_integrated.py --llm-url=http://my-server-name:3000
+
+FormHe will skip the LLM-based fault localization if the server does not respond after a set timeout.
+
 ## Pre-set scripts
 
 We include some pre-set scripts which can be used to replicate the results in our paper.  
 We used the "Complete results (15 processes)" configuration.
 
-### Complete results (15 processes) (estimated 40 hours)
+### Complete results (15 processes) (estimated 60 hours)
 - All instances
 - All experiments
 - Timeout of 10 minutes
@@ -32,7 +45,7 @@ We used the "Complete results (15 processes)" configuration.
 
     ./run_all_parallel.sh
 
-### Complete results (1 process) (estimated 25 days)
+### Complete results (1 process) (estimated 40 days)
 - All instances
 - All experiments
 - Timeout of 10 minutes
@@ -53,7 +66,7 @@ We used the "Complete results (15 processes)" configuration.
 ## Execution
 The main executable for FormHe is `formhe/asp_integrated.py`. Using `--help` will show all options available.
 
-Example: `python3 formhe/asp_integrated.py instances/A_0/0.lp`
+Example: `python3 formhe/asp_integrated.py instances/C/C_0_1/4.lp --skip-llm-fl`
 
 ## Batch Execution
 

@@ -25,15 +25,12 @@ data_mcs_missing_relaxed <- read_data('214') %>% filter(!str_detect(instance, "_
 data_mcs_missing_strict <- read_data('215') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
 data_mcs_extra <- read_data('216') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
 data_lm <- read_data('217') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
-data_llm <- read_data('213') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
 data_mfl <- read_data('218') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
 
 data_fl_gemma2 <- read_data('1056') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
 data_fl_phi2 <- read_data('1054') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
 data_fl_codellama7b <- read_data('1057') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
 data_fl_starcoder2_3b <- read_data('1055') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
-
-data_no_pruning <- read_data('220') %>% filter(!str_detect(instance, "_private") & !str_detect(instance, "demo"))
 
 cat("Total real instances:", length(data_correct) + (data_main %>%
   filter(str_detect(instance, "mooshak")) %>%

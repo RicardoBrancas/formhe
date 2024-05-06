@@ -13,12 +13,12 @@ from argparse_dataclass import ArgumentParser
 from datasets import Dataset
 from peft import TaskType, LoraConfig, get_peft_model
 from sklearn.metrics import precision_score, accuracy_score, recall_score, jaccard_score, hamming_loss
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
 from transformers import Trainer, TrainingArguments, EvalPrediction
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-NEEDS_PAD_TOKEN = {"microsoft/phi-2", "codellama/CodeLlama-7b-hf", "bigcode/starcoder2-3b", "bigcode/starcoder2-7b"}
+NEEDS_PAD_TOKEN = {"microsoft/phi-2", "codellama/CodeLlama-7b-hf", "bigcode/starcoder2-3b", "bigcode/starcoder2-7b", "meta-llama/Meta-Llama-3-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.2"}
 NEEDS_PAD_LEFT = {"bigcode/starcoder2-3b", "bigcode/starcoder2-7b"}
 
 correct_programs = {
@@ -57,6 +57,8 @@ class TrainConfig:
     batch_size: int = 8
     epochs: int = 3
 
+    use_8bit: bool = False
+
     lora_r: int = 8
     lora_alpha: int = 32
     lora_dropout: float = 0.05
@@ -74,7 +76,7 @@ def train(config: TrainConfig):
     device_index = accelerator.process_index
     device_map = {"": device_index}
 
-    # bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+    bnb_config = BitsAndBytesConfig(load_in_8bit=config.use_8bit)
     peft_config = LoraConfig(task_type=TaskType.SEQ_CLS,
                              target_modules=config.target_modules if config.use_target_modules else None,
                              modules_to_save=["score"],
@@ -85,10 +87,11 @@ def train(config: TrainConfig):
     model = AutoModelForSequenceClassification.from_pretrained(config.base_model,
                                                                num_labels=config.max_program_length + 1,
                                                                torch_dtype=torch.bfloat16,
-                                                               # quantization_config=bnb_config,
+                                                               quantization_config=bnb_config,
                                                                problem_type="multi_label_classification",
                                                                attn_implementation="flash_attention_2",
-                                                               device_map=device_map)
+                                                               device_map=device_map,
+                                                               trust_remote_code=True)
 
     if config.base_model in NEEDS_PAD_TOKEN:
         model.config.pad_token_id = model.config.eos_token_id
@@ -167,9 +170,12 @@ def train(config: TrainConfig):
             learning_rate=config.learning_rate,
             per_device_train_batch_size=config.batch_size,
             per_device_eval_batch_size=config.batch_size,
+            gradient_accumulation_steps=max(1, int(4 / config.batch_size)),
             num_train_epochs=config.epochs,
             evaluation_strategy="epoch",
-            save_strategy="epoch"
+            save_strategy="epoch",
+            bf16_full_eval=True,
+            bf16=True
         ),
         train_dataset=ds["train"],
         eval_dataset=ds["test"],

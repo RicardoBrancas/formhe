@@ -15,114 +15,54 @@ library(reticulate)
 library(rlang)
 
 
-notion <- read_csv('analysis/notion.csv') %>% mutate(instance = paste0('mooshak/', instance))
-notion2 <- read_csv('analysis/notion2.csv') %>% mutate(instance = paste0('mooshak/', instance))
+# notion <- read_csv('analysis/notion.csv') %>% mutate(instance = paste0('mooshak/', instance))
+# notion2 <- read_csv('analysis/notion2.csv') %>% mutate(instance = paste0('mooshak/', instance))
 
-read_data <- function(name) {
-  data <- read_csv(paste0('analysis/data/', name, '.csv')) %>%
-    mutate(solved = status == 0 & !timeout & !memout,
-           feedback_type = ifelse(timeout & feedback_type != 'Synthesis Success', 'Timeout', feedback_type),
-           feedback_type = ifelse(memout & feedback_type != 'Synthesis Success', 'Memout', feedback_type),
-           ram = ram / 1024,
-           # problem = str_match(instance, '(?:.*)/(.).*')[, 2]) %>%
-           problem_tmp1 = str_match(instance, '(.*/.)_.*|(.*)/.*')[, 2],
-           problem_tmp2 = str_match(instance, '(.*/.)_.*|(.*)/.*')[, 3],
-           problem = coalesce(problem_tmp1, problem_tmp2)) %>%
-    filter(problem != 'mooshak/F' & problem != 'mooshak/01/F')
-  # filter(str_starts(problem, 'mooshak'))
-  if ('fault.partial' %in% names(data)) {
-    data <- data %>%
-      mutate(fault.identified.full = ifelse(!is.na(fault.partial) & fault.partial == 'Yes', paste(fault.identified, '(Partial)'), fault.identified))
-  }
-  data %>% mutate(selfeval.deleted.lines = as.character(selfeval.deleted.lines),
-                  selfeval.changes.generate.n = as.character(selfeval.changes.generate.n),
-                  selfeval.changes.generate.n.unique = as.character(selfeval.changes.generate.n.unique),
-                  selfeval.changes.test.n = as.character(selfeval.changes.test.n),
-                  selfeval.changes.test.n.unique = as.character(selfeval.changes.test.n.unique))
-  # data %>% left_join(notion, by = 'instance')
-}
+source("analysis/analysis_common.R")
 
-r184 <- read_data('184') # default
-r195 <- read_data('195') # default
-r196 <- read_data('196') # default
-r197 <- read_data('197') # default
-r198 <- read_data('198') # default
-r199 <- read_data('199') # sim
-r200 <- read_data('200') # default
-r201 <- read_data('201') # default
-r202 <- read_data('202') # default
-r203 <- read_data('203') # default
-r204 <- read_data('204') # default
-r205 <- read_data('205') # default
-r206 <- read_data('206') # 1 hour
-r207 <- read_data('207') # default
-r208 <- read_data('208') # default
-r210 <- read_data('210') # default
-r211 <- read_data('211') # default
-r212 <- read_data('212') # default
-r213 <- read_data('213') # default
+r214 <- read_data('214') # mcs missing relaxed
+r215 <- read_data('215') # mcs missing strict
+r216 <- read_data('216') # mcs extra
+r217 <- read_data('217') # line matching
+r218 <- read_data('218') # mfl
+r221 <- read_data('221') # default
+r222 <- read_data('222') # simulated
 
-r1001 <- read_data('1001') # default
-r1002 <- read_data('1002') # default
-r1003 <- read_data('1003') # default
-r1012 <- read_data('1012') # default
-r1013 <- read_data('1013') # default
-r1014 <- read_data('1014') # default
-r1015 <- read_data('1015') # fl only
-r1016 <- read_data('1016') # fl only
-r1017 <- read_data('1017') # fl only
-r1018 <- read_data('1018') # fl only
-r1019 <- read_data('1019') # fl only
-r1020 <- read_data('1020') # fl only
-r1021 <- read_data('1021') # none
-r1022 <- read_data('1022') # none-smallest
-r1023 <- read_data('1023') # hit-count
-r1024 <- read_data('1024') # hit-count-normalized
-r1025 <- read_data('1025') # hit-count-smallest
-r1026 <- read_data('1026') # random
-r1027 <- read_data('1027') # random-smallest
-r1028 <- read_data('1028') # default
-r1029 <- read_data('1029') # default
-r1030 <- read_data('1030') # default
-r1031 <- read_data('1031') # default
-r1032 <- read_data('1032') # default
-r1033 <- read_data('1033') # llm
-r1034 <- read_data('1034') # llm
-r1035 <- read_data('1035') # llm
-r1036 <- read_data('1036') # llm
-r1037 <- read_data('1037') # llm
-r1038 <- read_data('1038') # llm
-r1039 <- read_data('1039') # llm
-r1040 <- read_data('1040') # default
-r1041 <- read_data('1041') # no llm
-r1042 <- read_data('1042') # llm
-r1043 <- read_data('1043') # default - lm
-r1044 <- read_data('1044') # default (model)
-r1045 <- read_data('1045') # default (lora_it_full_datasetv2)
-r1046 <- read_data('1046') # default (lora_non_it_full_datasetv2)
-r1047 <- read_data('1047') # default (lora_it_full_datasetv2_promptv2)
-r1048 <- read_data('1048') # default (lora_it_full_datasetv2_promptv2)
-r1049 <- read_data('1049') # default (lora-gemma-2b-it-datasetv3-promptv2)
-r1050 <- read_data('1050') # default (lora-gemma-2b-it-datasetv3-promptv2-targetmodules)
-r1051 <- read_data('1051') # default (lora-phi-2-datasetv3-promptv2-targetmodules)
-
+r1054 <- read_data('1054') # fl-only (phi 2)
+r1055 <- read_data('1055') # fl-only (starcoder 2 3b)
+r1056 <- read_data('1056') # fl-only (gemma 2b)
+r1057 <- read_data('1057') # fl-only (codellama 7b)
+r1058 <- read_data('1058') # llm repair-only (gemma, gemma)
+r1059 <- read_data('1059') # llm repair-only (gemma, codellama) + DC
+r1060 <- read_data('1060') # fl-only gemma + DC
+r1061 <- read_data('1061') # simulated fl + gemma repair
+r1062 <- read_data('1062') # fl-only (normal fl + llama 3 8B)
+r1063 <- read_data('1063') # fl-only (llama 3 8B)
+r1064 <- read_data('1064') # fl-only (mistral 7b)
 
 source('analysis/plots.R')
 
-times_inverse_cactus('Sketch-based enum' = r195, "Mutation-based enum" = r207, "Mutation-based enum w/ LLM FL" = r210)
-times_inverse_cactus('Sketch-based enum' = r195, "Mutation-based enum" = r207, "Mutation-based enum w/ LLM FL" = r210, "Mutation-based enum w/ LLM FL + New Perm" = r211)
-times_inverse_cactus("New Dataset" = r213)
-times_inverse_cactus("New Dataset" = r213, filter_f = function(x) { str_starts(x, "mooshak") })
-times_inverse_cactus('Sketch-based enum' = r195, "Mutation-based enum" = r207, "Mutation-based enum w/ LLM FL" = r210, filter_f = function(x) { str_starts(x, "mooshak") })
+fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Llama 3 8B FL)' = r1062)
+fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Llama 3 8B FL)' = r1062, facet_vars = vars(public, synthetic))
+fault_identified_plot_new('Phi 2' = r1054, 'StarCoder 2 3B' = r1055, 'Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064)
+fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(public, synthetic))
 
-fault_identified_plot_new('Sketch-based enum' = r195, "Mutation-based enum" = r207, "Mutation-based enum w/ LLM FL" = r210, "New Dataset" = r213)
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059)
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { !str_starts(x, "mooshak") })
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { str_starts(x, "mooshak") })
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { str_starts(x, "mooshak") })
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { str_starts(x, "mooshak/") })
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, filter_f = function(x) { str_starts(x, "mooshak_") })
+
 fault_identified_plot_new('Sketch-based enum' = r195, "Mutation-based enum" = r207, "Mutation-based enum w/ LLM FL" = r210, "New Dataset" = r213, filter_f = function(x) { str_starts(x, "mooshak") })
-fault_identified_plot_new('Sketch-based enum' = r195, "Mutation-based enum" = r207, "Mutation-based enum w/ LLM FL" = r210, "New Dataset" = r213, filter_f = function(x) { str_starts(x, "mooshak") }, reduced_labels = F)
-fault_identified_plot_new('Sketch-based enum' = r195, "Mutation-based enum" = r207, "Mutation-based enum w/ LLM FL" = r210, "New Dataset" = r213, reduced_labels = F)
 
-inner_join(r210, r211, by = 'instance') %>% ggplot(aes(x = real.x, y = real.y)) +
+inner_join(r221, r1058, by = 'instance') %>% ggplot(aes(x = real.x, y = real.y)) +
   geom_point() +
   geom_abline()
+
+a <- inner_join(r221, r1058, by = 'instance') %>%
+  filter(str_starts(instance, "mooshak")) %>%
+  select(instance, feedback_type.x, feedback_type.y)
 
 detailed_times_boxplot("Mutation-based enum w/ LLM FL" = r210, "Mutation-based enum w/ LLM FL + New Perm" = r211, percentage = F)
 detailed_times_boxplot("Mutation-based enum w/ LLM FL" = r210 %>% filter(feedback_type != "Synthesis Success"), percentage = F)
@@ -131,6 +71,10 @@ detailed_times_boxplot("Mutation-based enum w/ LLM FL" = r210, percentage = T)
 inner_join(r204, r205, by = 'instance') %>% ggplot(aes(x = enum.programs.x, y = enum.programs.y)) +
   geom_point() +
   geom_abline()
+
+data_main %>%
+  filter(!str_detect(instance, "mooshak/")) %>%
+  sample_n(5)
 
 ##
 

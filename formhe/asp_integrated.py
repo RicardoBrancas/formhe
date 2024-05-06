@@ -8,7 +8,6 @@ from ordered_set import OrderedSet
 import runhelper
 from fl.Combination import CombinationFaultLocalizer
 from fl.Debug import DebugFL
-from fl.LLM import LLMFaultLocalizer
 from formhe.asp.instance import Instance
 from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
 from formhe.asp.synthesis.AspInterpreter import AspInterpreter
@@ -119,12 +118,12 @@ def main():
         print('No problems found\n')
         exit()
 
-    fault_localizer = CombinationFaultLocalizer(instance)
-    mcss = fault_localizer.fault_localize()
-
     if instance.config.simulate_fault_localization and instance.config.selfeval_lines is not None:
         debug_fl = DebugFL(instance)
         mcss = debug_fl.fault_localize()
+    else:
+        fault_localizer = CombinationFaultLocalizer(instance)
+        mcss = fault_localizer.fault_localize()
 
     runhelper.timer_stop('fault.localization.time')
 

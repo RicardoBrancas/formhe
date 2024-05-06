@@ -201,7 +201,7 @@ times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, eve
     my_theme()
 }
 
-fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrect_lines = F, angle = 0, reduced_labels = T, get_data = F, pattern = F, filter_f = NULL, wrap_width = 15) {
+fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrect_lines = F, angle = 0, reduced_labels = T, get_data = F, pattern = F, filter_f = NULL, facet_vars = NULL, wrap_width = 15) {
   runs <- list2(...)
   data <- bind_rows(runs, .id = 'run')
   if (!all) {
@@ -268,13 +268,16 @@ fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrec
   } else {
     tmp <- tmp + geom_bar(position = position_stack(reverse = TRUE))
   }
+  if (!is.null(facet_vars)) {
+    tmp <- tmp + facet_wrap({{facet_vars}}, scales="free_y", labeller = label_both)
+  }
   tmp +
     scale_x_discrete(guide = guide_axis(angle = angle), labels = label_wrap(wrap_width)) +
     scale_fill_ibm() +
     labs(y = '\\# Instances', x = NULL, fill = 'Fault Identified?', pattern = 'Fault Identified?', pattern_angle = 'Fault Identified?', pattern_fill = 'Fault Identified?') +
     # coord_polar("y", start = 0) +
     my_theme() +
-    theme(legend.title = element_text(size = rel(1), colour = "#000000", face = "plain"), legend.position = 'right') +
+    theme(legend.title = element_text(size = rel(1), colour = "#000000", face = "plain"), legend.position = 'bottom') +
     guides(fill = guide_legend(), pattern = guide_legend())
 }
 

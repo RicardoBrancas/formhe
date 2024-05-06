@@ -14,11 +14,14 @@ read_data <- function(name) {
     data <- data %>%
       mutate(fault.identified.full = ifelse(!is.na(fault.partial) & fault.partial == 'Yes', paste(fault.identified, '(Partial)'), fault.identified))
   }
-  data %>% mutate(selfeval.deleted.lines = as.character(selfeval.deleted.lines),
-                  selfeval.changes.generate.n = as.character(selfeval.changes.generate.n),
-                  selfeval.changes.generate.n.unique = as.character(selfeval.changes.generate.n.unique),
-                  selfeval.changes.test.n = as.character(selfeval.changes.test.n),
-                  selfeval.changes.test.n.unique = as.character(selfeval.changes.test.n.unique))
-  data %>% select(-contains("solution="))
+  # data %>% mutate(selfeval.deleted.lines = as.character(selfeval.deleted.lines),
+  #                 selfeval.changes.generate.n = as.character(selfeval.changes.generate.n),
+  #                 selfeval.changes.generate.n.unique = as.character(selfeval.changes.generate.n.unique),
+  #                 selfeval.changes.test.n = as.character(selfeval.changes.test.n),
+  #                 selfeval.changes.test.n.unique = as.character(selfeval.changes.test.n.unique))
+  data %>%
+    mutate(synthetic = !str_starts(instance, "mooshak")) %>%
+    mutate(public = synthetic | str_starts(instance, "mooshak/")) %>%
+    select(-contains("solution="))
   # data %>% left_join(notion, by = 'instance')
 }

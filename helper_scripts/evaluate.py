@@ -6,6 +6,7 @@ import glob
 import os
 import random
 import re
+import socket
 import sys
 import warnings
 
@@ -72,7 +73,16 @@ if __name__ == '__main__':
     if args.shuffle:
         random.shuffle(instances)
 
-    runner = Runner('helper_scripts/runsolver', 'analysis/data/' + args.name + '.csv', timeout=args.t, memout=args.m, pool_size=args.p, token="6534160271:AAF2Wui-s86BgQxOhtoeNV5WzYFKDv1ahkk", chat_id="148166194")
+    if 'TELEGRAM_CHAT_ID' in os.environ and 'TELEGRAM_TOKEN' in os.environ:
+        telegram_chat_id = os.environ['TELEGRAM_CHAT_ID']
+        telegram_token = os.environ['TELEGRAM_TOKEN']
+    else:
+        telegram_chat_id = None
+        telegram_token = None
+
+    hostname = socket.gethostname()
+
+    runner = Runner('helper_scripts/runsolver', 'analysis/data/' + args.name + '.csv', timeout=args.t, memout=args.m, pool_size=args.p, token=telegram_token, chat_id=telegram_chat_id, desc=f'{args.name} @ {hostname}')
     runner.register_instance_callback(process_data)
 
     for instance in instances:
