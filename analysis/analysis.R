@@ -41,6 +41,7 @@ r1063 <- read_data('1063') # fl-only (llama 3 8B)
 r1064 <- read_data('1064') # fl-only (mistral 7b)
 r1065 <- read_data('1065') # fl-only (codellama 7b 2)
 r1066 <- read_data('1066') # fl-only (normal fl + mistral 7B)
+r1067 <- read_data('1067') # simulated fl + codellama 7b repair
 
 source('analysis/plots.R')
 
@@ -52,9 +53,11 @@ fault_identified_plot_new('Phi 2' = r1054, 'StarCoder 2 3B' = r1055, 'Gemma 2B' 
 fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(public, synthetic))
 fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(synthetic))
 
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059)
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, facet_vars = vars(public, synthetic))
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair' = r1059, facet_vars = vars(synthetic))
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067)
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067, facet_vars = vars(public, synthetic))
+times_inverse_cactus('FormHe' = r221, 'Gemma Repair' = r1058, facet_vars = vars(public, synthetic))
+times_inverse_cactus('FormHe (sim FL)' = r222, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067, facet_vars = vars(public, synthetic))
+times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067, facet_vars = vars(synthetic))
 
 inner_join(r221, r1058, by = 'instance') %>% ggplot(aes(x = real.x, y = real.y)) +
   geom_point() +
