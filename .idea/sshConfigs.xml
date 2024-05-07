@@ -3,6 +3,7 @@
   <component name="SshConfigs">
     <configs>
       <sshConfig authType="OPEN_SSH" host="aquila" id="f2ab7100-6946-4416-8e32-d9f61404ac83" port="22" nameFormat="DESCRIPTIVE" username="rmbb" useOpenSSHConfig="true" />
+      <sshConfig authType="OPEN_SSH" host="zaek" id="fa0c2b9a-d4bc-4b8a-ad70-20fb336e6b28" port="22" nameFormat="DESCRIPTIVE" username="ricardo" useOpenSSHConfig="true" />
     </configs>
   </component>
 </project>
