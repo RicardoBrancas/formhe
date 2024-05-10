@@ -43,15 +43,21 @@ r1065 <- read_data('1065') # fl-only (codellama 7b 2)
 r1066 <- read_data('1066') # fl-only (normal fl + mistral 7B)
 r1067 <- read_data('1067') # simulated fl + codellama 7b repair
 
-source('analysis/plots.R')
+r1060 <- r1060 %>% mutate(diags.different = diags.different & diags.combined != "[()]")
 
-fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062)
-fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062,  facet_vars = vars(public, synthetic))
-fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062,  facet_vars = vars(synthetic))
+a <- r1060 %>% filter(diags.different) %>% select(instance, diags.combination, diags, diags.combined, selfeval.lines)
+
+b <- inner_join(r1056, r221, by="instance") %>% filter(fault.identified.x != fault.identified.y) %>% select(instance, fault.identified.x, fault.identified.y)
+
+source('analysis/plots.R')
 
 fault_identified_plot_new('Phi 2' = r1054, 'StarCoder 2 3B' = r1055, 'Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064)
 fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(public, synthetic))
 fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(synthetic))
+
+fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062)
+fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062,  facet_vars = vars(public, synthetic))
+fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062,  facet_vars = vars(synthetic))
 
 times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067)
 times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067, facet_vars = vars(public, synthetic))
