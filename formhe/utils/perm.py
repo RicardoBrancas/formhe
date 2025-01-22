@@ -6,7 +6,7 @@ from typing import Any
 
 import z3
 
-from trinity.ng_enumerator import NextGenEnumerator
+from formhe.trinity.ng_enumerator import NextGenEnumerator
 
 logger = logging.getLogger("formhe.permutations")
 

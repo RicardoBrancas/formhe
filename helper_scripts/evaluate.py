@@ -48,10 +48,10 @@ def process_data(instance: str, instance_data: dict, out_file: str):
                 instance_data['feedback_type'] = 'Parsing Error'
             elif 'Error while grounding' in log:
                 instance_data['feedback_type'] = 'Grounding Error'
-            elif 'Synthesis Failed' in log:
-                instance_data['feedback_type'] = 'Synthesis Failed'
             elif 'Solution found' in log:
                 instance_data['feedback_type'] = 'Synthesis Success'
+            elif 'Synthesis Failed' in log:
+                instance_data['feedback_type'] = 'Synthesis Failed'
             elif log.strip() == '':
                 instance_data['feedback_type'] = 'Empty'
             else:

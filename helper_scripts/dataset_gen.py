@@ -7,26 +7,27 @@ import traceback
 from collections import defaultdict
 from dataclasses import dataclass, field
 from logging import getLogger
-from multiprocessing import Pool
+from multiprocessing import Pool, RLock, current_process
 from operator import itemgetter
 from pathlib import Path
 
 from argparse_dataclass import ArgumentParser
-from ordered_set import OrderedSet
+from datasets import Dataset
 from pandas import DataFrame
 from tqdm import tqdm
 from tqdm.contrib.telegram import tqdm as tqdmt
 
 sys.argv.insert(1, "IGNORE")  # bypass requirement to pass an instance filename
 
-from fl.LLM import ListInterpreter
+from formhe.fl.llm import ListInterpreter
 from formhe.asp.instance import Instance
-from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
+from formhe.asp.synthesis.spec_generator import ASPSpecGenerator
 from formhe.asp.synthesis.AspVisitor import AspVisitor
 from formhe.exceptions.parser_exceptions import InstanceGroundingException
 from formhe.trinity.ng_enumerator import NextGenEnumerator, PresetStatement
 from formhe.utils.perm import PermutationGeneratorHelper
-from utils import config
+from formhe.utils import config
+from formhe.asp.problem import Problem
 
 
 def tqdm_wrapper(*args, **kwargs):
@@ -38,51 +39,42 @@ def tqdm_wrapper(*args, **kwargs):
 
 @dataclass
 class DataGenConfig:
-    n_processes: int = 8
-    seed: int = 42
+    n_processes: int = 38
+    seed: int = 45
 
-    depth: int = 2
-    cycles: int = 1
-    n_gen_deletions: int = 5
-    n_gen_mutations: dict[int, int] = field(default_factory=lambda: {1: 5, 2: 5, 3: 3, 4: 2})
-    deletion_n_lines_probabilities: dict[int, float] = field(default_factory=lambda: {1: 0.8, 2: 0.2})
-    max_percentage_incorrect_lines_threshold: float = 0.75
+    depths: list[int] = field(default_factory=lambda: [2, 3])
+    cycles: int = 5
+    n_gen_deletions: int = 30
+    n_gen_mutations: dict[int, int] = field(default_factory=lambda: {1: 30, 2: 30, 3: 20, 4: 20, 5: 20, 6: 10, 7: 10, 8: 10})
+    deletion_n_lines_probabilities: dict[int, float] = field(default_factory=lambda: {1: 0.4, 2: 0.4, 3: 0.2})
+    max_percentage_incorrect_lines_threshold: float = 0.8
     max_errors_until_quit: int = 1000
+    z3_timeout = 10000
 
-    save_dataset: bool = False
-    save_files: str = "../instances_synthetic_new"
-
-
-headers = {
-    'A': """%formhe-groundtruth:../../../mooshak/instances/1920_2.lp
-%formhe-domain-predicates:assign/2
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCBiKS4KZShhLCBjKS4KZShhLCBkKS4KZShjLCBkKS4K
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCBiKS4KZShhLCBjKS4KZShiLCBjKS4KZShjLCBkKS4KZShjLCBlKS4KZShjLCBmKS4KZShjLCBnKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLDIpLiBlKDIsMykuIGUoMyw0KS4gZSg0LDUpLiBlKDUsMSkuCmUoMSw2KS4gZSgyLDcpLiBlKDMsOCkuIGUoNCw5KSwgZSg1LDEwKS4KZSg2LDgpLiBlKDYsOSkuCmUoNyw5KS4gZSg3LDEwKS4KZSg4LDEwKS4=""",
-    'B': """%formhe-groundtruth:../../../mooshak/instances/1920_1.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZShhLCAxKS4KZShhLCAyKS4KZShiLCAzKS4KZShiLCA0KS4KZShjLCAxKS4KZShjLCAzKS4K
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCAxKS4KZShhLCAyKS4KZShhLCAzKS4KZShiLCA0KS4KZShiLCA1KS4KZShiLCA2KS4KZShjLCA3KS4KZShjLCA4KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZShhLCAxKS4KZShhLCAyKS4KZShhLCAzKS4KZShiLCA0KS4KZShiLCA1KS4KZShiLCA2KS4KZShjLCA3KS4KZShjLCA4KS4=""",
-    'C': """%formhe-groundtruth:../../../mooshak/instances/1819_2.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCBhKS4KZSgyLCBhKS4KZSgzLCBhKS4KZSgyLCBiKS4KZSg0LCBiKS4KZSg0LCBjKS4KZSg1LCBjKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCBhKS4KZSgyLCBhKS4KZSgzLCBhKS4KZSgyLCBiKS4KZSg0LCBiKS4KZSgzLCBjKS4KZSg0LCBjKS4KZSg0LCBkKS4KZSg1LCBkKS4=""",
-    'D': """%formhe-groundtruth:../../../mooshak/instances/1819_1.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4KZSgxLCAzKS4KZSg0LCAzKS4KZSg0LCA1KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCAyKS4KZSgxLCAzKS4KZSg0LCAzKS4KZSg0LCA1KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4KZSgyLCAzKS4KZSgzLCA0KS4KZSg0LCA1KS4KZSg1LCA2KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAxLgoKZSgxLCAzKS4KZSgyLCAzKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4=""",
-    'E': """%formhe-groundtruth:../../../mooshak/instances/2021_2.lp
-%formhe-domain-predicates:set/2
-%formhe-instance-base64:JSB2ZXJ0ZXhlcwp2ZXJ0ZXgoYSkuIHZlcnRleChiKS4gdmVydGV4KGMpLiB2ZXJ0ZXgoZCkuIHZlcnRleChlKS4KJSBlZGdlcwplZGdlKGEsYikuIGVkZ2UoYixjKS4gZWRnZShjLGQpLiBlZGdlKGQsYSkuIGVkZ2UoZCxlKS4K
-%formhe-instance-base64:dmVydGV4KGEpLiB2ZXJ0ZXgoYikuIHZlcnRleChjKS4gdmVydGV4KGUpLiB2ZXJ0ZXgoMSkuIHZlcnRleCgyKS4gdmVydGV4KDMpLiB2ZXJ0ZXgoNCkuIHZlcnRleCg1KS4KZWRnZShhLDEpLiBlZGdlKGEsMikuIGVkZ2UoYiwzKS4gZWRnZShjLDIpLiBlZGdlKGMsNCkuIGVkZ2UoZSwxKS4gZWRnZShlLDQpLiBlZGdlKGUsNSku"""
-}
+    savefile_suffix: str = "8"
+    instance_folder: str = "synthetic"
+    instance_split_n = int = 500
 
 
-def create_instance_dict(short_name, incorrect_program, correct_program, n_mutations, datagen_config):
+def write_instances(results, datatgen_config: DataGenConfig):
+    instance_counter = defaultdict(lambda: 0)
+
+    for instance in results:
+        out_filename = Path(f"{datatgen_config.instance_folder}_{datatgen_config.savefile_suffix}") / instance["problem"] / Path(instance["instance"]).stem / f"{instance_counter[instance['instance']]}.lp"
+        out_filename.parent.mkdir(parents=True, exist_ok=True)
+
+        instance_counter[instance['instance']] += 1
+
+        with open(out_filename, "w") as f:
+            f.write(f"%formhe-problem:{instance['problem']}\n")
+            f.write(f"%formhe-timestamp:{instance['timestamp']}\n")
+            f.write(f"%formhe-selfeval-lines:{' '.join(map(str, instance['fl']))}\n")
+            f.write(f"%formhe-selfeval-fix:{' '.join(map(str, instance['correction']))}\n")
+            f.write("\n")
+            f.write(instance["incorrect_program"])
+
+
+def create_instance_dict(short_name, incorrect_program, correct_program, n_mutations, problem, instance, datagen_config, correct_instances):
     incorrect_program_reduced = []
     reduce_mapping = {}
     reduce_offset = 0
@@ -104,59 +96,63 @@ def create_instance_dict(short_name, incorrect_program, correct_program, n_mutat
         return None
     for line_id in fl:
         assert line_id < len(incorrect_program_reduced)
+    reference_instance = random.choice(correct_instances[problem.name])
     return {'instance': short_name,
-            'problem': short_name[11],
-            'correct_program_lines': correct_program,
+            'problem': problem.name,
+            'timestamp': instance.config.timestamp - 1 if instance.config.timestamp != 0 else 1,
+            'correct_program_lines': tuple(correct_program),
             'correct_program': "\n".join(correct_program),
-            'incorrect_program_lines': incorrect_program_reduced,
+            'reference_program_lines': tuple(reference_instance),
+            'reference_program': "\n".join(reference_instance),
+            'incorrect_program_lines': tuple(incorrect_program_reduced),
             'incorrect_program': "\n".join(incorrect_program_reduced),
-            'correction': correction,
+            'correction': tuple(correction),
             'n_mutations': n_mutations,
             'missing_lines': any([True for line in incorrect_program if line == ""]),
             'n_mising_lines': sum([1 for line in incorrect_program if line == ""]),
-            'fl': fl,
-            'line_scores': [1.0 if i in fl else 0.0 for i in range(len(incorrect_program_reduced))]
+            'fl': tuple(fl),
+            'line_scores': tuple([1.0 if i in fl else 0.0 for i in range(len(incorrect_program_reduced))])
             }
 
 
-def process_instance(instance_file: str, datagen_config: DataGenConfig):
-    short_name = instance_file.replace("../correct_instances/", "")
-    print("Generating mutations for", short_name)
+def process_correct_implementation(instance_file: str, problem: Problem, datagen_config: DataGenConfig, correct_instances):
+    worker_id = current_process()._identity[0]
+    short_name = instance_file.replace("correct_instances/", "")
     mutations_results = []
-    t = tqdm(total=((sum(datagen_config.n_gen_mutations.values())) + datagen_config.n_gen_deletions) * datagen_config.cycles)
-    t.set_description(short_name)
+    t = tqdm(total=(sum(datagen_config.n_gen_mutations.values()) * len(datagen_config.depths) + datagen_config.n_gen_deletions) * datagen_config.cycles, desc=short_name, position=worker_id)
+
     for cycle_i in range(datagen_config.cycles):
-        object.__setattr__(conf, "seed", str(datagen_config.seed) + short_name + str(cycle_i))
+        object.__setattr__(conf, "seed", hash(str(datagen_config.seed) + short_name + str(cycle_i)))
 
         try:
             instance = Instance(instance_file, shuffle=cycle_i != 0)
-        except Exception as ex:
-            print("Skipping", short_name)
-            print(ex)
-            continue
+            instance_modified = Instance(instance_file, shuffle=instance.shuffling if cycle_i != 0 else False, skips=list(range(len(instance.base_ast))))
 
-        predicates = instance.constantCollector.predicates
-        spec_generator = ASPSpecGenerator(instance, instance.config.extra_vars, predicates.items())
-        trinity_spec = spec_generator.trinity_spec
-        asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars)
-        asp_interpreter = ListInterpreter(instance, predicates.keys())
+            for i in range(len(problem.inputs)):
+                instance_modified.canon.compute_models(0, i=i)
 
-        try:
+            spec_generator = ASPSpecGenerator(instance, instance.config.extra_vars)
+            trinity_spec = spec_generator.trinity_spec
+            asp_visitor = AspVisitor(trinity_spec, spec_generator.free_vars)
+            asp_interpreter = ListInterpreter(instance_modified)
+
             correct_program = instance.get_program_lines()
             semi_bound_statements = []
-            for rule in instance.constantCollector.not_skipped:
+            for rule in instance_modified.skipped_rules:
                 node = asp_visitor.visit(rule)
                 semi_bound_statements.append(PresetStatement(node.children[0], node.children[1].children))
+
         except Exception as ex:
-            print("Skipping", short_name)
-            print(ex)
-            continue
+            print("Skipping", short_name, "because", str(ex))
+            return []
 
         for i in range(datagen_config.n_gen_deletions):
             to_delete_n = random.choices(list(datagen_config.deletion_n_lines_probabilities.keys()), list(datagen_config.deletion_n_lines_probabilities.values()))[0]
-            lines_to_delete = random.sample(list(range(len(correct_program))), to_delete_n)
+            lines_to_delete = random.sample(list(range(len(correct_program))), min(to_delete_n, len(correct_program) - 1))
             incorrect_program = [l if i not in lines_to_delete else "" for i, l in enumerate(correct_program)]
-            d = create_instance_dict(short_name, incorrect_program, correct_program, -1, datagen_config=datagen_config)
+            if asp_interpreter.test("\n".join(incorrect_program)):
+                continue
+            d = create_instance_dict(short_name, incorrect_program, correct_program, -1, problem=problem, instance=instance_modified, datagen_config=datagen_config, correct_instances=correct_instances)
             if d is None:
                 continue
             t.update()
@@ -164,58 +160,49 @@ def process_instance(instance_file: str, datagen_config: DataGenConfig):
 
         empty_statements = [PresetStatement(None, [])]
 
-        enumerator = NextGenEnumerator(trinity_spec, datagen_config.depth,
-                                       semi_bound_statements=semi_bound_statements + empty_statements, free_predicates=OrderedSet(predicates.keys()) - instance.constantCollector.predicates_generated,
-                                       force_generate_predicates=instance.constantCollector.predicates_used - instance.constantCollector.predicates_generated,
-                                       additional_body_roots=1)
+        for depth in datagen_config.depths:
+            enumerator = NextGenEnumerator(trinity_spec, depth, semi_bound_statements=semi_bound_statements + empty_statements, additional_body_roots=1)
 
-        enumerator.solver.set("timeout", 10000)
+            enumerator.solver.set("timeout", datagen_config.z3_timeout)
 
-        for n_mutations, mutations_per_program in datagen_config.n_gen_mutations.items():
-            while enumerator.solver.num_scopes() >= 1:
-                enumerator.solver.pop()
-            perm_helper = PermutationGeneratorHelper(str(datagen_config.seed) + short_name + str(cycle_i), len(enumerator.relaxation_vars()), n_mutations, enumerator, return_perms=True)
-            mut_count = 0
-            j = 0
-            while mut_count < mutations_per_program and j <= datagen_config.max_errors_until_quit:
-                prog, perm = perm_helper.next()
+            for n_mutations, mutations_per_program in datagen_config.n_gen_mutations.items():
+                while enumerator.solver.num_scopes() >= 1:
+                    enumerator.solver.pop()
+                perm_helper = PermutationGeneratorHelper(str(datagen_config.seed) + short_name + str(cycle_i), len(enumerator.relaxation_vars()), n_mutations, enumerator, return_perms=True)
+                mut_count = 0
+                error_count = 0
+                while mut_count < mutations_per_program and error_count <= datagen_config.max_errors_until_quit:
+                    prog, perm = perm_helper.next()
 
-                if prog is None:
-                    break
+                    if prog is None:
+                        break
 
-                try:
-                    asp_prog = asp_interpreter.eval(prog)
-                    evaluation_result = asp_interpreter.test("\n".join(asp_prog))
+                    try:
+                        asp_prog = asp_interpreter.eval(prog)
+                        evaluation_result = asp_interpreter.test("\n".join(asp_prog))
 
-                    if evaluation_result:
-                        j += 1
+                        if evaluation_result:
+                            error_count += 1
+                        else:
+                            d = create_instance_dict(short_name, asp_prog, correct_program, n_mutations, problem=problem, instance=instance_modified, datagen_config=datagen_config, correct_instances=correct_instances)
+                            if d is None:
+                                error_count += 1
+                                continue
+                            mut_count += 1
+                            t.update()
+                            mutations_results.append(d)
+                    except InstanceGroundingException:
+                        error_count += 1
                         pass
-                    else:
-                        d = create_instance_dict(short_name, asp_prog, correct_program, n_mutations, datagen_config=datagen_config)
-                        if d is None:
-                            continue
-                        mut_count += 1
-                        t.update()
-                        mutations_results.append(d)
-                except InstanceGroundingException:
-                    j += 1
-                    pass
-                except AssertionError as e:
-                    j += 1
-                    traceback.print_exception(e)
-                except Exception as e:
-                    j += 1
-                    pass
-                    # traceback.print_exception(e)
+                    except AssertionError as e:
+                        error_count += 1
+                        traceback.print_exception(e)
+                    except Exception as e:
+                        error_count += 1
+                        pass
+                        # traceback.print_exception(e)
 
     return mutations_results
-
-
-def tuplify(e):
-    if len(e) == 0:
-        return tuple()
-    else:
-        return tuple(e)
 
 
 if __name__ == "__main__":
@@ -230,34 +217,37 @@ if __name__ == "__main__":
     object.__setattr__(conf, "allow_not_generated_predicates", True)
     object.__setattr__(conf, "disable_head_empty_or_non_constant_constraint", True)
     object.__setattr__(conf, "disable_no_dont_care_in_head_constraint", True)
+    object.__setattr__(conf, "disable_no_dont_care_in_head_constraint", True)
+    object.__setattr__(conf, "enable_pool_operator", True)
 
-    instances = glob.glob("../correct_instances/mooshak/**/*.lp")
+    problem_files = glob.glob("problems/*.yaml")
+    problems = [Problem.from_yaml_file(f) for f in problem_files]
+
+    correct_instances = defaultdict(list)
+    for problem in problems:
+        for correct_instance_file in problem.all_correct_implementations:
+            correct_instances[problem.name].append(Instance(correct_instance_file).get_program_lines())
 
     results = []
-    with Pool(datagen_config.n_processes) as pool:
+    tqdm.set_lock(RLock())
+    with Pool(datagen_config.n_processes, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),), maxtasksperchild=1) as pool:
+        futures = []
+        t = tqdm_wrapper(total=0)
+        for problem in problems:
+            for correct_instance_file in problem.all_correct_implementations:
+                t.total += 1
+                futures.append(pool.apply_async(process_correct_implementation, (correct_instance_file, problem, datagen_config, correct_instances)))
 
-        t = tqdm_wrapper(pool.starmap(process_instance, [(instance, datagen_config) for instance in instances], chunksize=1), total=len(instances))
-        for r in t:
-            results += r
+        for future in futures:
+            results += future.get()
+            t.update()
 
-    results = [{k: v if not isinstance(v, list) else tuplify(v) for k, v in r.items()} for r in results]
-
-    if datagen_config.save_dataset:
-        df = DataFrame(results)
-        df.to_feather("dataset_4.feather")
-
-    if datagen_config.save_files:
-        instance_counter = defaultdict(lambda: 0)
-
-        for instance in results:
-            out_filename = Path(datagen_config.save_files) / instance["problem"] / Path(instance["instance"]).stem / f"{instance_counter[instance['instance']]}.lp"
-            out_filename.parent.mkdir(parents=True, exist_ok=True)
-
-            instance_counter[instance['instance']] += 1
-
-            with open(out_filename, "w") as f:
-                f.write(headers[instance["problem"]])
-                f.write(f"\n%formhe-selfeval-lines:{' '.join(map(str, instance['fl']))}\n")
-                f.write(f"%formhe-selfeval-fix:{' '.join(map(str, instance['correction']))}\n")
-                f.write("\n")
-                f.write(instance["incorrect_program"])
+    df = DataFrame(results)
+    print(len(df))
+    df = df.drop_duplicates()
+    print(len(df))
+    ds = Dataset.from_pandas(df)
+    ds = ds.train_test_split(test_size=500, seed=42)
+    print(ds)
+    write_instances(ds["test"], datagen_config)
+    ds["train"].save_to_disk(f"datasets/dataset_{datagen_config.savefile_suffix}")

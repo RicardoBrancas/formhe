@@ -1,0 +1,34 @@
+name: C
+title: Set Cover
+description: >-
+  Given a set of sets S, a set cover is a subset S′ ⊆ S such that the sets in S
+  and S′ cover the same set of elements, i.e. ∪ S = ∪ S′.
+  Write an ASP program that decides whether there is a set cover of size `k` for
+  some positive natural number `k`.
+
+  The input is a set of facts of the form `e(ELEMENT, SET)`, indicating that the
+  element `ELEMENT` belongs to the set `SET`. The resulting answer set should contain
+  the predicate `sel(SET)`, indicating that the set SET is part of the cover. Do not
+  include the definition for k or the example sets in your solution file.
+
+inputs:
+  - |
+    #const k = 2.
+    e(1, a). e(2, a). e(3, a). e(2, b). e(4, b). e(4, c). e(5, c).
+  - |
+    #const k = 2.
+    e(1, a). e(2, a). e(3, a). e(2, b). e(4, b). e(3, c). e(4, c). e(4, d). e(5, d).
+
+input_predicates:
+  - e/2
+
+inputs_constants:
+  - k
+
+output_predicates:
+  - sel/1
+
+correct_implementations:
+  - correct_instances/mooshak/**/C_*.lp
+
+canon_implementation: correct_instances/mooshak/01/C_0_1.lp

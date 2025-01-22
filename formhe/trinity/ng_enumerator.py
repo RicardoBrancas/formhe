@@ -2,7 +2,6 @@ import itertools
 import logging
 from collections import namedtuple
 from enum import Enum
-from types import NoneType
 from typing import Callable, TypeVar, NamedTuple, Any, Union
 
 import z3
@@ -11,7 +10,7 @@ from z3 import Solver, ExprRef
 
 import formhe.trinity.DSL
 import runhelper
-from formhe.asp.synthesis.ASPSpecGenerator import max_children_except_aggregate, max_children_with_aggregate
+from formhe.asp.synthesis.spec_generator import max_children_except_aggregate, max_children_with_aggregate
 from formhe.trinity.DSL import TyrellSpec, ApplyNode, AtomNode
 from formhe.trinity.DSL.type import Type
 from formhe.utils import config
@@ -139,6 +138,13 @@ class PresetStatement(NamedTuple):
             r += ', '.join(map(lambda x: '?' if x is None else str(x), self.body))
         r += '.'
         return r
+
+    def depth(self):
+        d = 0
+        for n in [self.head] + self.body:
+            if n is not None:
+                d = max(d, n.depth())
+        return d
 
 
 class Statement:
@@ -464,9 +470,9 @@ class Statement:
 
     def __repr__(self):
         res = f'Statement\n'
-        res += self.head.tree_repr()
-        for b in self.body:
-            res += b.tree_repr()
+        res += self.head.tree_repr(last=self.body is None or len(self.body) == 0)
+        for i, b in enumerate(self.body):
+            res += b.tree_repr(last=i == len(self.body) - 1)
         return res
 
 
@@ -508,8 +514,21 @@ class NextGenEnumerator:
         self.depth = depth
         self.var_counter = 0
 
-        self.statements = [Statement(self, depth, preset_statement) for preset_statement in bound_statements] + \
-                          [Statement(self, depth, preset_statement, binding_type=BindingType.SEMI_BOUND, additional_body_roots=additional_body_roots) for preset_statement in semi_bound_statements]
+        self.statements = []
+
+        for preset_statement in bound_statements:
+            if config.get().dynamic_depth:
+                d = max(preset_statement.depth() + depth - config.get().minimum_depth, depth)
+            else:
+                d = depth
+            self.statements.append(Statement(self, d, preset_statement))
+
+        for preset_statement in semi_bound_statements:
+            if config.get().dynamic_depth:
+                d = max(preset_statement.depth() + depth - config.get().minimum_depth, depth)
+            else:
+                d = depth
+            self.statements.append(Statement(self, d, preset_statement, binding_type=BindingType.SEMI_BOUND, additional_body_roots=additional_body_roots))
 
         debug_repr = ""
         for statement in self.statements:
@@ -544,8 +563,8 @@ class NextGenEnumerator:
         self.has_enumerated = False
 
     def init_solver(self):
-        # solver = z3.SolverFor("QF_NIA")
-        solver = z3.Solver()
+        solver = z3.SolverFor("QF_NIA")
+        # solver = z3.Solver()
 
         solver.set('random_seed', config.get().seed)
         # solver.set('unsat_core', True)
@@ -828,15 +847,33 @@ class NextGenEnumerator:
             for n in stmt.nodes:
                 # not a leaf node
                 if n.children and (n.bound != BindingType.BOUND):
-                    ctr_children = []
                     for p in child_pos:
                         if p < len(n.children):
-                            ctr_children.append(n.children[p].var == child.id)
+                            if n.bound == BindingType.NOT_BOUND:
+                                self.create_assertion(z3.Implies(n.children[p].var == child.id, n.var != parent.id))
+                            elif n.bound == BindingType.SEMI_BOUND:
+                                self.create_assertion(z3.Or(z3.And(n.var == n.binding, n.children[p].var == n.children[p].binding), z3.Implies(n.children[p].var == child.id, n.var != parent.id)))
 
-                    if n.bound == BindingType.NOT_BOUND:
-                        self.create_assertion(z3.Implies(z3.Or(ctr_children), n.var != parent.id))
-                    elif n.bound == BindingType.SEMI_BOUND:
-                        self.create_assertion(z3.Or(n.var == n.binding, z3.Implies(z3.Or(ctr_children), n.var != parent.id)))
+    def _resolve_is_not_grandparent_predicate(self, pred):
+        parent = self.spec.get_function_production_or_raise(pred.args[0])
+        if isinstance(pred.args[1], str):
+            child = self.spec.get_function_production_or_raise(pred.args[1])
+        elif isinstance(pred.args[1], tuple):
+            child = self.spec.get_enum_production(pred.args[1][0], pred.args[1][1])
+        else:
+            raise ValueError()
+
+        for stmt in self.statements:
+            for n in stmt.nodes:
+                # not a leaf node
+                if n.children and (n.bound != BindingType.BOUND):
+                    for c1 in n.children:
+                        if c1.children:
+                            for c2 in c1.children:
+                                if n.bound == BindingType.NOT_BOUND:
+                                    self.create_assertion(z3.Implies(c2.var == child.id, n.var != parent.id))
+                                elif n.bound == BindingType.SEMI_BOUND:
+                                    self.create_assertion(z3.Or(z3.And(n.var == n.binding, c2.var == c2.binding), z3.Implies(c2.var == child.id, n.var != parent.id)))
 
     def _resolve_is_parent_predicate(self, pred):
         self._check_arg_types(pred, [str, str, (int, float)])
@@ -883,6 +920,8 @@ class NextGenEnumerator:
                     self._resolve_not_occurs_predicate(pred)
                 elif pred.name == 'is_not_parent':
                     self._resolve_is_not_parent_predicate(pred)
+                elif pred.name == 'is_not_grandparent':
+                    self._resolve_is_not_grandparent_predicate(pred)
                 elif pred.name == 'commutative':
                     self._resolve_commutative_predicate(pred)
                 elif pred.name == 'distinct_args':

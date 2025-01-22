@@ -2,7 +2,6 @@ import itertools
 
 import clingo
 import clingo.ast
-from clingo.ast import ASTType
 from ordered_set import OrderedSet
 
 
@@ -37,8 +36,15 @@ class Visitor(clingo.ast.Transformer):
         self.in_definition_block = False
 
     def visit_Definition(self, definition):
-        self.definitions.append(definition.name)
-        return definition
+        self.rule_counter += 1
+        if self.skips is not None and self.rule_counter - 1 in self.skips:
+            self.skipped.append(definition)
+            return None
+        else:
+            if not self.in_definition_block:
+                self.not_skipped.append(definition)
+            self.definitions.append(definition.name)
+            return definition
 
     def visit_Function(self, function, in_skip=False, in_head=None, is_literal=None):
         arg_types = []
@@ -105,6 +111,19 @@ class Instrumenter(clingo.ast.Transformer):
         self.relaxation_functions = []
         self.relaxations_function_map = {}
         self.disabled = False
+
+    def visit_Definition(self, definition):
+        self.rule_counter += 1
+        if not self.disabled:
+            relaxation_function = clingo.Function(f"_instrumenter", [clingo.Number(self.counter)])
+            self.relaxation_functions.append(relaxation_function)
+            self.relaxations_function_map[relaxation_function] = self.rule_counter - 1
+            self.original_rules.append(str(definition))
+            self.counter += 1
+            self.rules.append(definition)
+            return definition
+        else:
+            return definition
 
     def visit_Rule(self, rule):
         self.rule_counter += 1

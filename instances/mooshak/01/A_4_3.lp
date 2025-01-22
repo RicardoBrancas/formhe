@@ -1,10 +1,7 @@
-%formhe-groundtruth:../../../mooshak/instances/1920_2.lp
-%formhe-domain-predicates:assign/2
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCBiKS4KZShhLCBjKS4KZShhLCBkKS4KZShjLCBkKS4K
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCBiKS4KZShhLCBjKS4KZShiLCBjKS4KZShjLCBkKS4KZShjLCBlKS4KZShjLCBmKS4KZShjLCBnKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLDIpLiBlKDIsMykuIGUoMyw0KS4gZSg0LDUpLiBlKDUsMSkuCmUoMSw2KS4gZSgyLDcpLiBlKDMsOCkuIGUoNCw5KSwgZSg1LDEwKS4KZSg2LDgpLiBlKDYsOSkuCmUoNyw5KS4gZSg3LDEwKS4KZSg4LDEwKS4=
-%formhe-selfeval-lines:
-%formhe-selfeval-fix:v(N) :- e(_, N). v(N) :- e(N, _). assign(X, I) :- color(X, I).
+%formhe-problem:A
+%formhe-timestamp:1667761693
+%formhe-selfeval-lines:(), (1, 2)
+%formhe-selfeval-fix:"v(N) :- e(_, N). v(N) :- e(N, _). assign(X, I) :- color(X, I).", "v(N) :- e(_, N). v(N) :- e(N, _). 1 {assign(X,I) : c(I)} 1 :- v(X). :- assign(X,I), assign(Y,I), e(X,Y), c(I)."
 
 % Mooshak-exercises in lab13 from ALC
 % Problem A
@@ -29,5 +26,5 @@
 
 
 c(1..k).
-1 {color(X,I) : c(I)} 1 :- v(X).             
+1 {color(X,I) : c(I)} 1 :- v(X).
 :- color(X,I), color(Y,I), e(X,Y), c(I).

@@ -6,7 +6,7 @@ from itertools import islice
 
 from ordered_set import OrderedSet
 
-from formhe.asp.synthesis.ASPSpecGenerator import ASPSpecGenerator
+from formhe.asp.synthesis.spec_generator import ASPSpecGenerator
 from formhe.asp.instance import Instance
 from formhe.sygus.sygus_visitor import SyGuSVisitor
 

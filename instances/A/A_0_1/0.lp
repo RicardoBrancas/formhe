@@ -1,12 +1,10 @@
-%formhe-groundtruth:../../../mooshak/instances/1920_2.lp
-%formhe-domain-predicates:assign/2
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCBiKS4KZShhLCBjKS4KZShhLCBkKS4KZShjLCBkKS4K
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCBiKS4KZShhLCBjKS4KZShiLCBjKS4KZShjLCBkKS4KZShjLCBlKS4KZShjLCBmKS4KZShjLCBnKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLDIpLiBlKDIsMykuIGUoMyw0KS4gZSg0LDUpLiBlKDUsMSkuCmUoMSw2KS4gZSgyLDcpLiBlKDMsOCkuIGUoNCw5KSwgZSg1LDEwKS4KZSg2LDgpLiBlKDYsOSkuCmUoNyw5KS4gZSg3LDEwKS4KZSg4LDEwKS4=
-%formhe-selfeval-lines:
-%formhe-selfeval-fix:node(N) :- e(N, _).
+%formhe-problem:A
+%formhe-timestamp:1
+%formhe-selfeval-lines:0 1 2
+%formhe-selfeval-fix:node(N) :- e(_, N). node(N) :- e(N, _).  :- e(N, M), assign(N, C), assign(M, C).
 
+ :- assign(0, N), color(M; 0).
+color(N) :- e(N, 1).
+assign(C, (1..0)) :- e(N, M), assign(N, N), assign(M, C).
 color((1..k)).
-node(N) :- e(_, N).
 1 { assign(N, C) : color(C) } 1 :- node(N).
- :- e(N, M), assign(N, C), assign(M, C).

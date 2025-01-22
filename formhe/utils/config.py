@@ -1,13 +1,16 @@
 import argparse
 import ast
 import base64
+import dataclasses
+import fcntl
 import logging
 import os
 import re
 import sys
-import fcntl
+import time
+import typing
 from dataclasses import dataclass, field
-from typing import Any, List, Tuple
+from typing import Any, Tuple
 
 from argparse_dataclass import ArgumentParser
 
@@ -17,7 +20,7 @@ def parse_selfeval_lines(s: str) -> Tuple[Tuple[int, ...], ...]:
         return ((),)
     if ',' in s:
         elems_s = re.findall(r'\((.*?)\)', s)
-        return tuple(ast.literal_eval('(' + e + ',)') for e in elems_s)
+        return tuple(ast.literal_eval('(' + e + ',)') if len(e) > 0 else tuple() for e in elems_s)
     else:
         return (tuple(map(int, s.split())),)
 
@@ -33,28 +36,30 @@ def parse_selfeval_fix(s: str) -> Tuple[str, ...]:
 class Config:
     # inputs
     input_file: str = field(metadata={'args': ['input_file']})
-    groundtruth: str = field(metadata={'args': ['--ground-truth']}, default=None)
-    mcs_query: str = field(metadata={'args': ['--query']}, default=None)
-    domain_predicates: list = field(metadata=dict(nargs='*', type=str), default=None)
-    optimization_problem: bool = False
+    problem: str = None
+    problems_folder: str = "./problems"
+    timestamp: int = field(default_factory=lambda: int(time.time()), metadata=dict(type=int))
 
     # core
     seed: Any = 42
     logging_level: str = 'DEBUG'
     eval_params: str = field(metadata=dict(required=False, type=lambda x: base64.b64decode(x.encode('utf-8')).decode('utf-8')), default='')
-    instance_base64: list[str] = field(metadata=dict(required=False, nargs='+', type=lambda s: base64.b64decode(s.encode('utf-8')).decode('utf-8')), default='')
     no_enumerator_debug: bool = False
     no_stdin_instance: bool = False
     exit_after_fault_localization: bool = False
     drop_stderr: bool = False
     print_only_first_test_case: bool = False
     external_fl: list[int] = field(metadata=dict(nargs='*', type=int), default=None)
+    model_feedback_n: int = 5
+    ignore_timestamps: bool = False
+    hints_only: bool = False
+    fl_watch_file: str = None
 
     # llm
     llm_url: str = "http://localhost:3000"
     llm_timeout: int = 300
-    fl_prompt_version: int = 2
-    repair_prompt_version: int = 1
+    fl_prompt_version: int = 3
+    repair_prompt_version: int = 3
 
     # predicates
     disable_commutative_predicate: bool = False
@@ -67,12 +72,16 @@ class Config:
     enable_redundant_arithmetic_ops: bool = False
     disable_head_empty_or_non_constant_constraint: bool = False
     disable_no_dont_care_in_head_constraint: bool = False
+    enum_all_answer_sets: bool = False
 
     # parameters
     minimum_depth: int = 2
     maximum_depth: int = 5
+    dynamic_depth: bool = True
     minimum_mutations: int = 1
     maximum_mutations: int = 5
+    empty_statements: int = 2
+    additional_body_nodes: int = 1
     bandit_starting_epsilon: float = 1
     bandit_epsilon_multiplier: float = 0.9999
     bandit_exploration_count: int = 5000
@@ -89,6 +98,14 @@ class Config:
     mcs_sorting_method: str = field(metadata=dict(choices=['hit-count', 'hit-count-avg', 'hit-count-normalized', 'hit-count-smallest', 'random', 'random-smallest', 'none', 'none-smallest']), default='hit-count')
     disable_mutation_node_expansion: bool = False
     skip_llm_fl: bool = False
+    skip_llm_repair: bool = False
+    mutate_llm_attempt: bool = False
+    # mcs_timeout: int = 10
+    iterative_llm: bool = True
+    max_llm_iterations: int = 3
+    mutation_based_repair: bool = True
+    enable_pool_operator: bool = False
+    use_canon_reference: bool = False
 
     # heuristics
     line_matching_threshold: int = 3
@@ -105,6 +122,36 @@ class Config:
     simulate_fault_localization: bool = False
     selfeval_fix_test: bool = False
     selfeval_fix: tuple[str] = field(metadata=dict(type=parse_selfeval_fix), default=None)
+    test_partial_fault: bool = False
+
+    def process_overrides(self, overrides, suppress_override_message):
+        for key, value in overrides.items():
+            if not suppress_override_message:
+                logger.info('Overriding local config %s: %s', key, value)
+
+            for field in dataclasses.fields(Config):
+                if field.name == key:
+                    if field.type is list or typing.get_origin(field.type) is list:
+                        if field.metadata and 'type' in field.metadata and callable(field.metadata['type']):
+                            object.__setattr__(self, key, [field.metadata['type'](v) for v in value.split(' ') if v])
+                        else:
+                            object.__setattr__(self, key, [v for v in value.split(' ') if v])
+                    elif field.type is bool:
+                        try:
+                            object.__setattr__(self, key, strtobool(value))
+                        except:
+                            object.__setattr__(self, key, value)
+                    elif field.metadata and 'type' in field.metadata and callable(field.metadata['type']):
+                        try:
+                            object.__setattr__(self, key, field.metadata['type'](value))
+                        except Exception as e:
+                            object.__setattr__(self, key, value)
+                    else:
+                        object.__setattr__(self, key, value)
+
+                    break
+            else:
+                raise AttributeError(key)
 
 
 parser = ArgumentParser(Config, formatter_class=argparse.ArgumentDefaultsHelpFormatter)

@@ -17,16 +17,14 @@ dependencies = [
   "clingox~=1.2",
   "ordered-set",
   "tqdm",
-  "cvc5~=1.0.1",
   "argparse-dataclass",
-  "cvc5~=1.0.1",
   "z3-solver~=4.11.2",
   "pandas",
   "runhelper",
   "multiset",
   "scipy",
-  "bentoml"
+  "bentoml",
+  "func_timeout",
+  "dataclass-wizard",
+  "requests"
 ]
-
-[project.scripts]
-"formhe-bug-find" = "formhe.asp_bug_finder:main"

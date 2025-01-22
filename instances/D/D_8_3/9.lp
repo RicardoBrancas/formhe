@@ -1,16 +1,10 @@
-%formhe-groundtruth:../../../mooshak/instances/1819_1.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4KZSgxLCAzKS4KZSg0LCAzKS4KZSg0LCA1KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCAyKS4KZSgxLCAzKS4KZSg0LCAzKS4KZSg0LCA1KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4KZSgyLCAzKS4KZSgzLCA0KS4KZSg0LCA1KS4KZSg1LCA2KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAxLgoKZSgxLCAzKS4KZSgyLCAzKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4=
-%formhe-selfeval-lines:5
-%formhe-selfeval-fix: :- conected(V1, V2), not sel(V1), not sel(V2).
+%formhe-problem:D
+%formhe-timestamp:1667586067
+%formhe-selfeval-lines:1 3 4
+%formhe-selfeval-fix: { sel(V) : v(V) } k. v(X) :- e(_, X). conected(V1, V2) :- e(V2, V1).  :- conected(V1, V2), not sel(V1), not sel(V2).
 
-v(X) :- e(_, X).
-v(X) :- e(X, _).
- { sel(V) : v(V) } k.
 conected(V1, V2) :- e(V1, V2).
-conected(V1, V2) :- e(V2, V1).
- :- conected(V1, V2), not sel(V1), not sel(V2), e(0, 0).
+v(X) :- e(_, X), 0 == X.
+v(X) :- e(X, _).
+sel(V1) :- e(V2, V1), e(0, _).
+ :- conected(V1, V2), not v(V1), not sel(V2), conected(0; V2, V2; X).

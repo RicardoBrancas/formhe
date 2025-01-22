@@ -1,7 +1,7 @@
 import logging
 import re
 from collections import Counter
-from itertools import chain
+from itertools import chain, pairwise
 from typing import Union
 
 import clingo.ast
@@ -46,7 +46,7 @@ def bag_nodes(node):
 
 class AspVisitor:
 
-    def __init__(self, spec: TyrellSpec, free_vars: list = None, anonymize=False, domain_predicates=None):
+    def __init__(self, spec: TyrellSpec, free_vars: list = None, anonymize=False, anonymize_vars=False, anonymize_functions=False, domain_predicates=None):
         self.spec = spec
         self.builder = Builder(spec)
         if free_vars is not None:
@@ -57,7 +57,11 @@ class AspVisitor:
             self.domain_predicates = OrderedSet(domain_predicates)
         else:
             self.domain_predicates = OrderedSet()
-        self.anonymize = anonymize
+        if anonymize:
+            anonymize_vars = True
+            anonymize_functions = True
+        self.anonymize_vars = anonymize_vars
+        self.anonymize_functions = anonymize_functions
         self.anon_var_map = {}
         self.anon_var_count = 0
         self.anon_pred_map = {}
@@ -108,7 +112,7 @@ class AspVisitor:
             return self.builder.make_apply('not', [self.visit(literal.atom)])
 
     def visit_Variable(self, variable):
-        if not self.anonymize:
+        if not self.anonymize_vars:
             Terminal: EnumType = self.spec.get_type('Terminal')
             if variable.name not in Terminal.domain:
                 Terminal.domain.append(variable.name)
@@ -131,7 +135,7 @@ class AspVisitor:
         args = [self.visit(a) for a in function.arguments]
         if function.name:
             actual_fn_name = f'{function.name}/{len(args)}'
-            if self.anonymize and (function.name, len(args)) not in self.domain_predicates:
+            if self.anonymize_functions and (function.name, len(args)) not in self.domain_predicates:
                 if actual_fn_name not in self.anon_pred_map:
                     self.anon_pred_map[actual_fn_name] = f'p{self.anon_pred_count}/{len(args)}'
                     self.anon_pred_count += 1
@@ -150,25 +154,54 @@ class AspVisitor:
             raise NotImplementedError()  # todo tuples
 
     def visit_Comparison(self, comparison):
-        if len(comparison.guards) != 1:
-            raise NotImplementedError
-        lhs = comparison.term
-        comparison_op = comparison.guards[0].comparison
-        rhs = comparison.guards[0].term
-        match comparison_op:
-            case clingo.ast.ComparisonOperator.Equal:
-                return self.builder.make_apply('eq', [self.visit(lhs), self.visit(rhs)])
-            case clingo.ast.ComparisonOperator.NotEqual:
-                if lhs.ast_type == clingo.ast.ASTType.Function and lhs.name == '' and \
-                        rhs.ast_type == clingo.ast.ASTType.Function and rhs.name == '':  # tuple comparison
-                    comparison_elements = []
-                    for elem_a, elem_b in zip(lhs.arguments, rhs.arguments):
-                        comparison_elements.append(self.builder.make_apply('neq', [self.visit(elem_a), self.visit(elem_b)]))
-                    return self.builder.make_apply('and', comparison_elements)
-                else:
-                    return self.builder.make_apply('neq', [self.visit(lhs), self.visit(rhs)])
-            case _:
-                raise NotImplementedError()
+
+        parts = []
+        for a, guard in pairwise([comparison.term] + list(comparison.guards)):
+            if a.ast_type == clingo.ast.ASTType.Guard:
+                term = a.term
+            else:
+                term = a
+
+            lhs = term
+            comparison_op = guard.comparison
+            rhs = guard.term
+            match comparison_op:
+                case clingo.ast.ComparisonOperator.Equal:
+                    parts.append(self.builder.make_apply('eq', [self.visit(lhs), self.visit(rhs)]))
+                    continue
+                case clingo.ast.ComparisonOperator.LessThan:
+                    parts.append(self.builder.make_apply('lt', [self.visit(lhs), self.visit(rhs)]))
+                    continue
+                case clingo.ast.ComparisonOperator.LessEqual:
+                    parts.append(self.builder.make_apply('le', [self.visit(lhs), self.visit(rhs)]))
+                    continue
+                case clingo.ast.ComparisonOperator.GreaterThan:
+                    parts.append(self.builder.make_apply('gt', [self.visit(lhs), self.visit(rhs)]))
+                    continue
+                case clingo.ast.ComparisonOperator.GreaterEqual:
+                    parts.append(self.builder.make_apply('ge', [self.visit(lhs), self.visit(rhs)]))
+                    continue
+                case clingo.ast.ComparisonOperator.NotEqual:
+                    if lhs.ast_type == clingo.ast.ASTType.Function and lhs.name == '' and \
+                            rhs.ast_type == clingo.ast.ASTType.Function and rhs.name == '':  # tuple comparison
+                        comparison_elements = []
+                        for elem_a, elem_b in zip(lhs.arguments, rhs.arguments):
+                            comparison_elements.append(self.builder.make_apply('neq', [self.visit(elem_a), self.visit(elem_b)]))
+                        parts.append(self.builder.make_apply('and', comparison_elements))
+                        continue
+                    else:
+                        parts.append(self.builder.make_apply('neq', [self.visit(lhs), self.visit(rhs)]))
+                        continue
+                case _:
+                    raise NotImplementedError()
+
+        if len(parts) == 1:
+            return parts[0]
+        else:
+            res = self.builder.make_apply('and', parts)
+            print(str(comparison))
+            print(res)
+            return res
 
     def visit_BinaryOperation(self, binary_operation):
         match binary_operation.operator_type:
@@ -228,7 +261,10 @@ class AspVisitor:
             else:
                 condition = self.builder.make_apply('and_', [self.visit(cond) for cond in elem.condition])
 
-            return self.builder.make_apply('aggregate', [left_guard, literal, condition, right_guard])
+            if literal.name == "pool" and len(elem.condition) == 0:
+                return self.builder.make_apply('aggregate_pool', [left_guard, literal, right_guard])
+            else:
+                return self.builder.make_apply('aggregate', [left_guard, literal, condition, right_guard])
         elif len(aggregate.elements) == 1 and aggregate.elements[0].ast_type == clingo.ast.ASTType.BodyAggregateElement and len(aggregate.elements[0].terms) == 1:
             elem = aggregate.elements[0]
             literal = self.visit(elem.terms[0])
@@ -303,7 +339,6 @@ class AspVisitor:
             head = self.visit(rule.head)
         body = [self.visit(a) for a in rule.body]
         return self.builder.make_apply('stmt', [head, self.builder.make_apply('and', body)])
-        return head, body
 
     def visit_Minimize(self, minimize):
         weight = self.visit(minimize.weight)

@@ -1,12 +1,9 @@
-%formhe-groundtruth:../../../mooshak/instances/1920_1.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZShhLCAxKS4KZShhLCAyKS4KZShiLCAzKS4KZShiLCA0KS4KZShjLCAxKS4KZShjLCAzKS4K
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCAxKS4KZShhLCAyKS4KZShhLCAzKS4KZShiLCA0KS4KZShiLCA1KS4KZShiLCA2KS4KZShjLCA3KS4KZShjLCA4KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZShhLCAxKS4KZShhLCAyKS4KZShhLCAzKS4KZShiLCA0KS4KZShiLCA1KS4KZShiLCA2KS4KZShjLCA3KS4KZShjLCA4KS4=
-%formhe-selfeval-lines:1
-%formhe-selfeval-fix:k { sel(X) : s(X) } k.
+%formhe-problem:B
+%formhe-timestamp:1667930928
+%formhe-selfeval-lines:1 2
+%formhe-selfeval-fix: :- inter(X, Y), sel(X), sel(Y). s(X) :- e(X, I).
 
-s(X) :- e(X, I).
-k { sel(X) : sel(X) } k.
+k { sel(X) : s(X) } k.
+ :- inter(I, Y), sel(X), sel(Y).
+inter(X, k) :- e(X, I).
 inter(X, Y) :- e(X, E), e(Y, E), X != Y.
- :- inter(X, Y), sel(X), sel(Y).

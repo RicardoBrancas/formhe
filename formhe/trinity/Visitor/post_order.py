@@ -28,6 +28,11 @@ class NodeVisitor(GenericVisitor):
         method = getattr(self._interp, method_name, lambda x: x)
         return method(atom_node.data)
 
+    def visit_hole_node(self, atom_node: AtomNode):
+        method_name = self._eval_method_name("hole")
+        method = getattr(self._interp, method_name, lambda x: x)
+        return method(None)
+
     def visit_param_node(self, param_node: ParamNode):
         param_index = param_node.index
         if param_index >= len(self.inputs):

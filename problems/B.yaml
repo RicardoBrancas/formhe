@@ -1,0 +1,37 @@
+name: B
+title: Pairwise Disjoint Sets
+description: >-
+  Consider a set of sets *S* and a natural positive number *k*. Write an ASP program
+  that decides whether there are *k* sets in *S* that are pair-wise disjoint. Formally,
+  S′ ⊆ S, |S′| = k, and ∀ s1, s2 ∈ S′: s1 ∩ s2 = ∅.
+
+  The elements of sets in *S* are given by the predicate `e(set, element)`. Your
+  program should contain the predicate `sel(set)` that is true iff set belongs to
+  the solution S′. Do not include the definition for k or the example sets in your
+  solution file.
+
+inputs:
+  - |
+    #const k = 2.
+    e(a, 1). e(a, 2). e(b, 3). e(b, 4). e(c, 1). e(c, 3).
+  - |
+    #const k = 3.
+    e(a, 1). e(a, 2). e(a, 3). e(b, 4). e(b, 5). e(b, 6). e(c, 7). e(c, 8).
+  - |
+    #const k = 2.
+    e(a, 1). e(a, 2). e(a, 3). e(b, 4). e(b, 5). e(b, 6). e(c, 7). e(c, 8).
+
+input_predicates:
+  - e/2
+
+input_constants:
+  - k
+
+output_predicates:
+  - sel/1
+
+correct_implementations:
+  - correct_instances/mooshak/**/B_*.lp
+
+canon_implementation: correct_instances/mooshak/01/B_0_1.lp
+

@@ -1,0 +1,4 @@
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 285_repeat -p=20 --shuffle --exit-after-fault-localization --enable-pool-operator --skip-mcs-line-pairings --skip-llm-fl
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 286_repeat -p=20 --shuffle --exit-after-fault-localization --enable-pool-operator --skip-mcs-negative-non-relaxed --skip-mcs-negative-relaxed --skip-mcs-positive-conditional --skip-llm-fl
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 287_repeat -p=20 --shuffle --exit-after-fault-localization --enable-pool-operator --skip-llm-fl
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 290_repeat -p=20 --shuffle --exit-after-fault-localization --enable-pool-operator --skip-mcs-negative-non-relaxed --skip-mcs-negative-relaxed --skip-mcs-positive-conditional --skip-mcs-line-pairings --skip-llm-fl --use-mfl

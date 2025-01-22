@@ -1,0 +1,11 @@
+python formhe/bento_manager.py --url http://localhost:3000 load --fl-model-name gemma-1.1-2b-it-lora-datasetv8-promptv3-targetmodules --fl-gpu-id 0 --repair-model-name codegemma-1.1-7b-it-repair-lora-4bit-datasetv8-promptv3-targetmodules --repair-gpu-id 1 --repair-use-4bit --no-repair-return-token-type-ids
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 281_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --exit-after-fault-localization --enable-pool-operator --skip-mcs-negative-non-relaxed --skip-mcs-negative-relaxed --skip-mcs-positive-conditional --skip-mcs-line-pairings
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 288_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --exit-after-fault-localization --enable-pool-operator
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 289_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --exit-after-fault-localization --enable-pool-operator --use-canon-reference
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 291_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --exit-after-fault-localization --enable-pool-operator --skip-mcs-negative-non-relaxed --skip-mcs-negative-relaxed --skip-mcs-positive-conditional --use-mfl
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 292_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --enable-pool-operator --skip-llm-repair
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 293_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --enable-pool-operator --no-mutation-based-repair
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 294_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --enable-pool-operator --no-iterative-llm
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 295_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --enable-pool-operator --use-canon-reference
+PYTHONHASHSEED=0 python helper_scripts/evaluate.py 296_repeat -p=20 --shuffle --llm-url=http://localhost:3000 --enable-pool-operator
+python formhe/bento_manager.py --url http://localhost:3000 exit

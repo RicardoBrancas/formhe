@@ -1,13 +1,7 @@
-%formhe-groundtruth:../../../mooshak/instances/1819_1.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4KZSgxLCAzKS4KZSg0LCAzKS4KZSg0LCA1KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCAyKS4KZSgxLCAzKS4KZSg0LCAzKS4KZSg0LCA1KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4KZSgyLCAzKS4KZSgzLCA0KS4KZSg0LCA1KS4KZSg1LCA2KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAxLgoKZSgxLCAzKS4KZSgyLCAzKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4=
+%formhe-problem:D
+%formhe-timestamp:1
 %formhe-selfeval-lines:
-%formhe-selfeval-fix:vx(X) :- e(Y, X).
+%formhe-selfeval-fix:0 { sel(X) : vx(X) } k.  :- not sel(X), not sel(Y), e(X, Y).
 
 vx(X) :- e(X, Y).
-0 { sel(X) : vx(X) } k.
- :- not sel(X), not sel(Y), e(X, Y).
+vx(X) :- e(Y, X).

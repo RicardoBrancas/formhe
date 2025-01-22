@@ -98,3 +98,6 @@ class ValueType(LeafType):
 
     def __repr__(self) -> str:
         return 'ValueType({}, properties={})'.format(self._name, self._properties)
+
+
+SpecialType = ValueType("_SpecialType")

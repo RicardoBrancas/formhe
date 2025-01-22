@@ -1,20 +1,21 @@
 import logging
+import math
 import random
 from typing import List, Iterable
-import math
 
 import bentoml
 import httpx
-import runhelper
 from ordered_set import OrderedSet
 
+import runhelper
 from asp.instance import Instance
-from fl.External import ExternalFL
-from fl.FaultLocalizer import FaultLocalizer, FaultType
-from fl.LLM import LLMFaultLocalizer
-from fl.LineMatching import LineMatchingFL
 from fl.MCS import MCSFL
 from fl.SBFL import SBFL
+from fl.external import ExternalFL
+from fl.fault_localizer import FaultLocalizer, FaultType
+from fl.line_matching import LineMatchingFL
+from fl.llm import LLMFaultLocalizer
+from utils import print_utils
 
 logger = logging.getLogger('formhe.asp.fault_localization')
 
@@ -67,16 +68,23 @@ class CombinationFaultLocalizer(FaultLocalizer):
     def fault_localize(self) -> List:
 
         mcs_fl = MCSFL(self.instance)
+        # try:
         mcss = mcs_fl.fault_localize()
+        # mcss = func_timeout(config.get().mcs_timeout, mcs_fl.fault_localize, [])
         self.mcs_hit_counter = mcs_fl.mcs_hit_counter
+        # except FunctionTimedOut:
+        #     mcss = [frozenset()]
+        #     self.mcs_hit_counter = defaultdict(lambda: 0)
 
         if not self.instance.config.skip_llm_fl:
             try:
                 with bentoml.SyncHTTPClient(self.instance.config.llm_url, timeout=600) as client:
-                    llm_fl = LLMFaultLocalizer(self.instance, client)
-                    llm_result = llm_fl.fault_localize()
-                    self.llm_line_scores = llm_fl.scores
-                    mcss += llm_result
+                    if client.supports_fl():
+                        llm_fl = LLMFaultLocalizer(self.instance, client)
+                        llm_result = llm_fl.fault_localize()
+                        self.llm_line_scores = llm_fl.scores
+                        self.missing_lines = llm_fl.missing_lines
+                        mcss += llm_result
             except (httpx.ConnectError, httpx.ReadTimeout):
                 logger.warning("Could not connect to LLM server...")
 
@@ -96,6 +104,15 @@ class CombinationFaultLocalizer(FaultLocalizer):
             assert len(sbfl_result) == 1
             for b in sbfl_result[0]:
                 mcss = OrderedSet([mcs | {b} for mcs in mcss])
+
+        runhelper.log_any('fl.before.match.removal', print_utils.simplify(mcss))
+
+        if not self.instance.config.skip_mcs_line_pairings and lm_fl.fully_matching_rules:
+            mcss = [mcs - OrderedSet(lm_fl.fully_matching_rules) for mcs in mcss]
+
+        mcss = OrderedSet(map(frozenset, mcss))
+
+        runhelper.log_any('fl.after.match.removal', print_utils.simplify(mcss))
 
         mcss_sorted = self.sort(mcss)
         self.report(mcss_sorted)

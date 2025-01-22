@@ -1,11 +1,10 @@
-%formhe-groundtruth:../../../mooshak/instances/1819_2.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCBhKS4KZSgyLCBhKS4KZSgzLCBhKS4KZSgyLCBiKS4KZSg0LCBiKS4KZSg0LCBjKS4KZSg1LCBjKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCBhKS4KZSgyLCBhKS4KZSgzLCBhKS4KZSgyLCBiKS4KZSg0LCBiKS4KZSgzLCBjKS4KZSg0LCBjKS4KZSg0LCBkKS4KZSg1LCBkKS4=
-%formhe-selfeval-lines:
-%formhe-selfeval-fix:cov(I) :- sel(X), e(I, X), i(I).
+%formhe-problem:C
+%formhe-timestamp:1667930992
+%formhe-selfeval-lines:1 2
+%formhe-selfeval-fix:i(X) :- e(X, _). cov(I) :- sel(X), e(I, X), i(I).
 
-i(X) :- e(X, _).
-s(X) :- e(_, X).
 k { sel(X) : s(X) } k.
+sel(X) :- e(X, _), e(0, 0).
+cov(I) :- sel(X), e(I, X), sel(I), 0 == 1.
  :- not cov(X), i(X).
+s(X) :- e(_, X).

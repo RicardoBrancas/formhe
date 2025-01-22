@@ -1,11 +1,9 @@
-%formhe-groundtruth:../../../mooshak/instances/2021_2.lp
-%formhe-domain-predicates:set/2
-%formhe-instance-base64:JSB2ZXJ0ZXhlcwp2ZXJ0ZXgoYSkuIHZlcnRleChiKS4gdmVydGV4KGMpLiB2ZXJ0ZXgoZCkuIHZlcnRleChlKS4KJSBlZGdlcwplZGdlKGEsYikuIGVkZ2UoYixjKS4gZWRnZShjLGQpLiBlZGdlKGQsYSkuIGVkZ2UoZCxlKS4K
-%formhe-instance-base64:dmVydGV4KGEpLiB2ZXJ0ZXgoYikuIHZlcnRleChjKS4gdmVydGV4KGUpLiB2ZXJ0ZXgoMSkuIHZlcnRleCgyKS4gdmVydGV4KDMpLiB2ZXJ0ZXgoNCkuIHZlcnRleCg1KS4KZWRnZShhLDEpLiBlZGdlKGEsMikuIGVkZ2UoYiwzKS4gZWRnZShjLDIpLiBlZGdlKGMsNCkuIGVkZ2UoZSwxKS4gZWRnZShlLDQpLiBlZGdlKGUsNSku
-%formhe-selfeval-lines:0 3
-%formhe-selfeval-fix:group(a).  :- edge(X, Y), not set(X, G), not set(Y, G), group(G).
+%formhe-problem:E
+%formhe-timestamp:1667812516
+%formhe-selfeval-lines:1 2 3
+%formhe-selfeval-fix:group(a). group(b).  :- edge(X, Y), not set(X, G), not set(Y, G), group(G).
 
-vertex(a).
-group(b).
 1 { set(X, G) : group(G) } 1 :- vertex(X).
- :- edge(X, Y), not set(X, G), not set(Y, G), vertex(G).
+group(a) :- 0 == a.
+group(b) :- 0 != 1.
+vertex(0) :- edge(X, Y), not set(X, b), not set(Y, G), group(G).

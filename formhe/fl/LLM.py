@@ -4,9 +4,10 @@ from typing import List
 from _bentoml_impl.client import AbstractClient
 
 import runhelper
-from asp.instance import Instance
-from asp.synthesis.AspInterpreter import AspInterpreter
-from fl.FaultLocalizer import FaultLocalizer
+from formhe.asp.instance import Instance
+from formhe.asp.synthesis.AspInterpreter import AspInterpreter
+from formhe.fl.fault_localizer import FaultLocalizer
+from formhe.utils.llm import fl_prompt, fl_prompt_raw
 
 logging.getLogger("httpcore").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -28,17 +29,11 @@ class LLMFaultLocalizer(FaultLocalizer):
         self.scores = None
 
     def create_prompt(self) -> str:
-        if self.instance.config.fl_prompt_version == 1:
-            return self.instance.get_program_str()
-
-        elif self.instance.config.fl_prompt_version == 2:
-            correct = self.instance.ground_truth.get_program_str()
-            incorrect = "\n".join(map(lambda x: f"<{x[0]}>{x[1]}", enumerate(self.instance.get_program_lines())))
-            prompt = f"<correct>{correct}\n<incorrect>{incorrect}"
-            return prompt
-
-        else:
-            raise NotImplementedError()
+        return fl_prompt(version=self.instance.config.fl_prompt_version,
+                         incorrect_program=self.instance.get_program_str(),
+                         correct_program=self.instance.reference.get_program_str(),
+                         reference_program=self.instance.reference.get_program_str(),
+                         title=self.instance.problem.title)
 
     def parse_response(self, response: str) -> list:
         return [frozenset([i for (i, e) in enumerate(response) if e >= 0.5])]
@@ -55,6 +50,7 @@ class LLMFaultLocalizer(FaultLocalizer):
         logger.info("FL Response:\n%s", response)
 
         self.scores = response[1:]
+        self.missing_lines = response[0] >= 0.5
         lines = self.parse_response(response[1:])
 
         runhelper.timer_stop("fl.llm.time")

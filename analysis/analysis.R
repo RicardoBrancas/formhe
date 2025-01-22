@@ -13,162 +13,167 @@ library(xtable)
 library(mldr)
 library(reticulate)
 library(rlang)
-
-
-# notion <- read_csv('analysis/notion.csv') %>% mutate(instance = paste0('mooshak/', instance))
-# notion2 <- read_csv('analysis/notion2.csv') %>% mutate(instance = paste0('mooshak/', instance))
+library('devEMF')
+library(purrr)
 
 source("analysis/analysis_common.R")
 
-r214 <- read_data('214') # mcs missing relaxed
-r215 <- read_data('215') # mcs missing strict
-r216 <- read_data('216') # mcs extra
-r217 <- read_data('217') # line matching
-r218 <- read_data('218') # mfl
-r221 <- read_data('221') # default
-r222 <- read_data('222') # simulated
-
-r1054 <- read_data('1054') # fl-only (phi 2)
-r1055 <- read_data('1055') # fl-only (starcoder 2 3b)
-r1056 <- read_data('1056') # fl-only (gemma 2b)
-r1057 <- read_data('1057') # fl-only (codellama 7b)
-r1058 <- read_data('1058') # llm repair-only (gemma, gemma)
-r1059 <- read_data('1059') # llm repair-only (gemma, codellama) + DC
-r1060 <- read_data('1060') # fl-only gemma + DC
-r1061 <- read_data('1061') # simulated fl + gemma repair
-r1062 <- read_data('1062') # fl-only (normal fl + llama 3 8B)
-r1063 <- read_data('1063') # fl-only (llama 3 8B)
-r1064 <- read_data('1064') # fl-only (mistral 7b)
-r1065 <- read_data('1065') # fl-only (codellama 7b 2)
-r1066 <- read_data('1066') # fl-only (normal fl + mistral 7B)
-r1067 <- read_data('1067') # simulated fl + codellama 7b repair
+r280 <- read_data('280') # codegemma repair no quant
+r281 <- read_data('281') # fl only - llm only - gemma
+r282 <- read_data('282') # fl only - llm only - codegemma
+r283 <- read_data('283') # fl only - llm only - phi3
+r284 <- read_data('284') # fl only - llm only - starcoder 2
+r285 <- read_data('285') # fl only - MCSICS only
+r286 <- read_data('286') # fl only - line matching only
+r287 <- read_data('287') # fl only - default w/o llm
+r288 <- read_data('288') # fl only - default
+r289 <- read_data('289') # fl only - default w/o reference selection
+r290 <- read_data('290') # fl only - MFL only
+r291 <- read_data('291') # fl only - default w/o MSICS w/ MFL
+r292 <- read_data('292') # gemma fl + mutation only repair
+r293 <- read_data('293') # gemma fl + llm only repair - codegemma 7b 4bits
+r294 <- read_data('294') # default - no iterative llm
+r295 <- read_data('295') # default - w/o reference selection
+r296 <- read_data('296', load_log = T) # default - codegemma 7b 4bits
+r297 <- read_data('297') # default - codqwen1.5 7b 8bits
+r298 <- read_data('298') # default - llama3 8b 4bits
+r299 <- read_data('299') # default - phi3 mini
+r300 <- read_data('300') # default - gemma 2b
+r301 <- read_data('301') # default - codegemma 2b
+r301 <- read_data('301') # default - codegemma 2b
+r303 <- read_data('303') # default - codegemma 2b
 
 source('analysis/plots.R')
 
-fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062)
-fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062,  facet_vars = vars(public, synthetic))
-fault_identified_plot_new('Formhe (Gemma FL)' = r221, 'Formhe (Mistral 7B FL)' = r1066, 'Formhe (Llama 3 8B FL)' = r1062,  facet_vars = vars(synthetic))
 
-fault_identified_plot_new('Phi 2' = r1054, 'StarCoder 2 3B' = r1055, 'Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064)
-fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(public, synthetic))
-fault_identified_plot_new('Gemma 2B' = r1056, 'CodeLlama 7B' = r1057, 'Llama 3 8B' = r1063, 'Mistral 7B' = r1064, facet_vars = vars(synthetic))
-
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067)
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067, facet_vars = vars(public, synthetic))
-times_inverse_cactus('FormHe' = r221, 'Gemma Repair' = r1058, facet_vars = vars(public, synthetic))
-times_inverse_cactus('FormHe (sim FL)' = r222, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067, facet_vars = vars(public, synthetic))
-times_inverse_cactus('FormHe' = r221, 'FormHe (sim FL)' = r222, 'Gemma Repair' = r1058, 'Gemma Repair (sim FL)' = r1061, 'CodeLlama Repair (sim FL)' = r1067, facet_vars = vars(synthetic))
-
-inner_join(r221, r1058, by = 'instance') %>% ggplot(aes(x = real.x, y = real.y)) +
-  geom_point() +
-  geom_abline()
-
-a <- inner_join(r221, r1058, by = 'instance') %>%
-  filter(str_starts(instance, "mooshak")) %>%
-  select(instance, feedback_type.x, feedback_type.y)
-
-detailed_times_boxplot("Mutation-based enum w/ LLM FL" = r210, "Mutation-based enum w/ LLM FL + New Perm" = r211, percentage = F)
-detailed_times_boxplot("Mutation-based enum w/ LLM FL" = r210 %>% filter(feedback_type != "Synthesis Success"), percentage = F)
-detailed_times_boxplot("Mutation-based enum w/ LLM FL" = r210, percentage = T)
-
-inner_join(r204, r205, by = 'instance') %>% ggplot(aes(x = enum.programs.x, y = enum.programs.y)) +
-  geom_point() +
-  geom_abline()
-
-data_main %>%
-  filter(!str_detect(instance, "mooshak/")) %>%
-  sample_n(5)
-
-##
-
-fault_identified_plot_new("FormHe" = r1028, "FormHe 2" = r1041, "LLM" = r1033, "LLM Modified Prompt" = r1034, "Finetuned LLM Classifier" = r1035, "Finetuned LLM Classifier  Comb" = r1036, "Finetuned LLM Classifier  Comb+Sort" = r1037, reduced_labels = T)
-fault_identified_plot_new("FormHe" = r1041, "LLM" = r1042, "Formhe+lora gemma 2b it datasetv2 promptv1 targetmodules" = r1044, "Formhe+lora gemma 2b it datasetv2 promptv2 targetmodules" = r1047, "Formhe+lora gemma 2b it datasetv3 promptv2 targetmodules" = r1050, "Formhe+lora phi 2 datasetv3 promptv2 targetmodules" = r1051, reduced_labels = T)
-fault_identified_plot_new("FormHe" = r1041, "LLM" = r1042, "Formhe+lora gemma 2b it datasetv2 promptv1 targetmodules" = r1044, "Formhe+lora gemma 2b it datasetv2 promptv2 targetmodules" = r1047, "Formhe+lora gemma 2b it datasetv3 promptv2 targetmodules" = r1050, "Formhe+lora phi 2 datasetv3 promptv2 targetmodules" = r1051, reduced_labels = F)
-fault_identified_plot_new("FormHe" = r1041, "LLM" = r1042, "Formhe+lora gemma 2b it datasetv2 promptv1 targetmodules" = r1044, "Formhe+lora gemma 2b it datasetv2 promptv2 targetmodules" = r1047, "Formhe+lora gemma 2b it datasetv3 promptv2 targetmodules" = r1050, "Formhe+lora phi 2 datasetv3 promptv2 targetmodules" = r1051, reduced_labels = T, filter_f = function(x) { str_starts(x, "mooshak") })
-fault_identified_plot_new("FormHe" = r1041, "LLM" = r1042, "Formhe+lora gemma 2b it datasetv2 promptv1 targetmodules" = r1044, "Formhe+lora gemma 2b it datasetv2 promptv2 targetmodules" = r1047, "Formhe+lora gemma 2b it datasetv3 promptv2 targetmodules" = r1050, "Formhe+lora phi 2 datasetv3 promptv2 targetmodules" = r1051, reduced_labels = T, filter_f = function(x) { str_starts(x, "mooshak/") })
-fault_identified_plot_new("FormHe" = r1041, "LLM" = r1042, "Formhe+lora gemma 2b it datasetv2 promptv1 targetmodules" = r1044, "Formhe+lora gemma 2b it datasetv2 promptv2 targetmodules" = r1047, "Formhe+lora gemma 2b it datasetv3 promptv2 targetmodules" = r1050, "Formhe+lora phi 2 datasetv3 promptv2 targetmodules" = r1051, reduced_labels = T, filter_f = function(x) { str_starts(x, "mooshak_") })
-fault_identified_plot_new("FormHe" = r1041, "LLM" = r1042, "Formhe+lora gemma 2b it datasetv2 promptv1 targetmodules" = r1044, "Formhe+lora gemma 2b it datasetv2 promptv2 targetmodules" = r1047, "Formhe+lora gemma 2b it datasetv3 promptv2 targetmodules" = r1050, "Formhe+lora phi 2 datasetv3 promptv2 targetmodules" = r1051, reduced_labels = F, filter_f = function(x) { str_starts(x, "mooshak") })
-fault_identified_plot_new("FormHe" = r1028, "FormHe 2" = r1041, "LLM" = r1033, "LLM Modified Prompt" = r1034, "Finetuned LLM Classifier" = r1035, reduced_labels = T)
-fault_identified_plot_new("FormHe" = r1028, "Finetuned LLM Classifier" = r1035, reduced_labels = T, filter_f = function(x) { str_starts(x, "mooshak") })
-fault_identified_plot_new("FormHe" = r1028, "LLM" = r1033, reduced_labels = F)
-fault_identified_plot_new("FormHe" = r1028, "LLM" = r1033, reduced_labels = F, filter_f = function(x) { str_starts(x, "mooshak") })
-
-a <- r1028 %>%
-  filter(str_starts(instance, "mooshak")) %>%
-  filter(fault.identified == "Yes (first MCS)" | fault.identified == "Yes (no incorrect lines)") %>%
-  select(instance, fault.identified)
-a <- r1035 %>%
-  filter(str_starts(instance, "mooshak")) %>%
-  filter(fault.identified == "Yes (first MCS)" | fault.identified == "Yes (no incorrect lines)") %>%
-  select(instance, fault.identified)
-a <- inner_join(r1028, r1035, by = "instance") %>%
-  filter(str_starts(instance, "mooshak")) %>%
-  filter((fault.identified.x == "Yes (first MCS)" | fault.identified.x == "Yes (no incorrect lines)") | (fault.identified.y == "Yes (first MCS)" | fault.identified.y == "Yes (no incorrect lines)")) %>%
-  select(instance, fault.identified.x, mcss, mcss.sorted.x, fault.identified.y, fl.llm, mcss.sorted.y)
-
-#### PAPER PLOTS
-
-plot_pdf('times', 0.8 * linewidth, .29 * linewidth,
-         times_inverse_cactus(FormHe = r184, 'Pruning\nDisabled' = r191 %>% select(-models.missing)) +
-           geom_vline(xintercept = 600, linetype = 2, color = '#575757') +
-           theme(legend.position = 'right'))
-
-print(xtable(fault_identified_plot_new('Missing AS (relaxed)' = r185,
-                                       'Missing AS (strict)' = r186,
-                                       'Extra Answer Set' = r187,
-                                       'Line Matching' = r188,
-                                       'SBFL' = r190,
-                                       'MFL' = r189,
-                                       'FormHe Default' = r184,
-                                       get_data = T)), include.rownames = F, booktabs = TRUE, NA.string = '--', latex.environments = "center", sanitize.text.function = identity, hline.after = c(-1, 0, 5, 6, 7))
-
-feedback_fault_grid_new(r184)
-feedback_fault_grid_new(r191)
-
-r184 %>%
-  filter(startsWith(problem, 'mooshak')) %>%
-  sample_n(5)
-r184 %>%
-  filter(!startsWith(problem, 'mooshak')) %>%
-  sample_n(5)
-
-#### POSTER PLOTS
-
-library(extrafont)
-font_import()
-loadfonts(device = "win")
-library(ggpattern)
+r296 %>%
+  filter(feedback_type != 'Solution OK' &
+           feedback_type != 'Parsing Error' &
+           feedback_type != 'Grounding Error' &
+           !is.na(reference_cost)) %>%
+  ggplot(aes(x = cut_number(reference_cost, 6), fill = solved)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~synthetic, scales = "free_y", labeller = label_both) +
+  labs(x = "Distance to closest reference implementation", y = "Number of instances", fill = "Repaired?")
 
 
-plot_emf("fl", 5, 2.5, fault_identified_plot_new('FormHe Default' = r184, pattern = T) +
-  coord_polar("y") +
-  geom_text(stat = 'count', color = "black", aes(x = 1.8, family = "Noto Sans", label = scales::percent(after_stat(count / sum(count)))), position = position_stack(reverse = TRUE, vjust = .5)) +
-  scale_fill_brewer(palette = "Dark2") +
-  scale_pattern_fill_manual(values = c("#0c4634", "#743301", "#45417c", "#971156")) +
-  theme_void(base_family = "Noto Sans") +
-  theme(aspect.ratio = 1) +
-  scale_pattern_discrete(guide = guide_legend(nrow = 1)))
+fl_table_data <- list('MSICS' = r285,
+                      'Line Matching' = r286,
+                      'Gemma 2B' = r281,
+                      'CodeGemma 2B' = r282,
+                      'StarCoder2 3B' = r284,
+                      'Phi 3 mini' = r283,
+                      'FormHe w/o LLM' = r287,
+                      'FormHe with Gemma 2B' = r288,
+                      'FormHe w/o implementation choosing' = r289,
+                      'MFL' = r290)
 
-plot_emf("r", 4, 2, times_inverse_cactus(FormHe = r184) +
+fault_identified_plot_new(!!!fl_table_data,
+                          facet_vars = vars(synthetic))
+
+print(xtable(fault_identified_plot_new(!!!fl_table_data, facet_vars = vars(synthetic), get_data = T),
+             caption = "Results for different fault localization methods for real and synthetic instances.", label = "tab:fault-localizer"),
+      include.rownames = F, booktabs = TRUE, NA.string = '--', latex.environments = "center",
+      sanitize.text.function = identity, hline.after = c(-1, 0, 1, 2, 6, 9, 10), caption.placement = "top",
+      table.placement = "tb", floating.environment = 'table*')
+
+repair_data_1 <- list('Mutation Repair' = r292,
+                      'LLM Repair' = r303,
+                      'Combined Repair' = r296,
+                      # 'Mutation+CodeGemma 7B (4bit) w/o Iterative LLM' = r294,
+                      'Combined Repair without\nImpl. Choosing' = r295)
+
+repair_data_2 <- list('Mutation+CodeGemma 7B' = r280,
+                      'Mutation+CodeGemma 7B (4bit)' = r296,
+                      'Mutation+CodeQwen1.5 7B (8bit)' = r297,
+                      # 'Mutation+Llama3 8B (4bit)' = r298,
+                      'Mutation+Phi3 mini' = r299,
+                      'Mutation+Gemma 2B' = r300,
+                      'Mutation+CodeGemma 2B' = r301)
+
+textwidth <- 3.31314
+
+repair_abduction_plot <- times_inverse_cactus(!!!repair_data_1, every_other = 3, filter_expr = expr(!synthetic)) +
   geom_vline(xintercept = 600, linetype = 2, color = '#575757') +
-  theme(legend.position = 'none') +
-  scale_y_continuous(breaks = extended_breaks(n = 6), labels = label_percent(accuracy = 1, suffix = '%')) +
-  labs(y = '% Hints Found', x = 'Time (s)') +
-  scale_color_brewer(palette = "Dark2"))
+  guides(color = guide_legend(byrow = TRUE, nrow = 2)) +
+  theme(legend.position = 'bottom',
+        legend.key.spacing.y = unit(0.05, 'cm'),
+        legend.margin = margin(0, 0, 0, -5))
+print(repair_abduction_plot)
+plot_pdf('repair_abduction', 1 * textwidth, .65 * textwidth, repair_abduction_plot)
 
-#### THESIS PLOTS
+cat("Average time for fault localization:", (r296 %>% summarise(n = mean(fault.localization.time, na.rm = T)))[[1]])
 
-textwidth <- 6.30045
+times_inverse_cactus(!!!repair_data_1, every_other = 3, filter_expr = expr(!synthetic), get_data = T)
+times_inverse_cactus(!!!repair_data_1, every_other = 3, filter_expr = expr(synthetic), get_data = T)
 
-plot_pdf('times_full', 0.9 * textwidth, .35 * textwidth,
-         times_inverse_cactus(FormHe = r184,
-                              'Symmetry Breaking\nDisabled' = r192 %>% select(-models.missing),
-                              'Semantic Pruning\nDisabled' = r193 %>% select(-models.missing),
-                              'All Pruning\nDisabled' = r191 %>% select(-models.missing)) +
-           geom_vline(xintercept = 600, linetype = 2, color = '#575757') +
-           guides(color = guide_legend(byrow = TRUE)) +
-           theme(legend.position = 'right',
-                 legend.spacing.y = unit(.25, 'cm')))
+times_inverse_cactus(!!!repair_data_2, every_other = 3, filter_expr = expr(!synthetic), get_data = T)
+
+print(xtable(feedback_fault_grid_new(r296)), include.rownames = F)
+
+cat("Longest repair answer with impl choosing:", (r296 %>%
+  filter(solved) %>%
+  summarise(n = max(real)))[[1]])
+cat("Longest repair answer without impl choosing:", (r295 %>%
+  filter(solved) %>%
+  summarise(n = max(real)))[[1]])
+
+cat("Total instances with feedback:", (r296 %>%
+  filter(!synthetic) %>%
+  filter(fault.identified == "Yes (no incorrect lines)" |
+           fault.identified == "Yes (first MCS)" |
+           fault.identified == "Subset (first MCS)" |
+           fault.identified == "Superset (first MCS)" |
+           fault.identified == "Not Disjoint (first MCS)" |
+           feedback_type == "Synthesis Success") %>%
+  tally() / r296 %>%
+  filter(!synthetic) %>%
+  filter(feedback_type != 'Solution OK' &
+           feedback_type != 'Parsing Error' &
+           feedback_type != 'Grounding Error') %>%
+  tally())[[1]])
+
+cat("Total instances with at least one line correctly identified:", (r296 %>%
+  filter(!synthetic) %>%
+  filter(fault.identified == "Yes (no incorrect lines)" |
+           fault.identified == "Yes (first MCS)" |
+           fault.identified == "Subset (first MCS)" |
+           fault.identified == "Superset (first MCS)" |
+           fault.identified == "Not Disjoint (first MCS)") %>%
+  tally() / r296 %>%
+  filter(!synthetic) %>%
+  filter(feedback_type != 'Solution OK' &
+           feedback_type != 'Parsing Error' &
+           feedback_type != 'Grounding Error') %>%
+  tally())[[1]])
+
+cat("Total instances with at least one line correctly identified & repair:", (r296 %>%
+  filter(!synthetic) %>%
+  filter((fault.identified == "Yes (no incorrect lines)" |
+    fault.identified == "Yes (first MCS)" |
+    fault.identified == "Subset (first MCS)" |
+    fault.identified == "Superset (first MCS)" |
+    fault.identified == "Not Disjoint (first MCS)") & feedback_type == "Synthesis Success") %>%
+  tally() / r296 %>%
+  filter(!synthetic) %>%
+  filter(feedback_type != 'Solution OK' &
+           feedback_type != 'Parsing Error' &
+           feedback_type != 'Grounding Error') %>%
+  tally())[[1]])
+
+cat("Total instances with repair but wrong FL:", (r296 %>%
+  filter(!synthetic) %>%
+  filter(!(fault.identified == "Yes (no incorrect lines)" |
+    fault.identified == "Yes (first MCS)" |
+    fault.identified == "Subset (first MCS)" |
+    fault.identified == "Superset (first MCS)" |
+    fault.identified == "Not Disjoint (first MCS)") & feedback_type == "Synthesis Success") %>%
+  tally() / r296 %>%
+  filter(!synthetic) %>%
+  filter(feedback_type != 'Solution OK' &
+           feedback_type != 'Parsing Error' &
+           feedback_type != 'Grounding Error') %>%
+  tally())[[1]])
 
 
 

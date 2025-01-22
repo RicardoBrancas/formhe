@@ -1,12 +1,10 @@
-%formhe-groundtruth:../../../mooshak/instances/2021_2.lp
-%formhe-domain-predicates:set/2
-%formhe-instance-base64:JSB2ZXJ0ZXhlcwp2ZXJ0ZXgoYSkuIHZlcnRleChiKS4gdmVydGV4KGMpLiB2ZXJ0ZXgoZCkuIHZlcnRleChlKS4KJSBlZGdlcwplZGdlKGEsYikuIGVkZ2UoYixjKS4gZWRnZShjLGQpLiBlZGdlKGQsYSkuIGVkZ2UoZCxlKS4K
-%formhe-instance-base64:dmVydGV4KGEpLiB2ZXJ0ZXgoYikuIHZlcnRleChjKS4gdmVydGV4KGUpLiB2ZXJ0ZXgoMSkuIHZlcnRleCgyKS4gdmVydGV4KDMpLiB2ZXJ0ZXgoNCkuIHZlcnRleCg1KS4KZWRnZShhLDEpLiBlZGdlKGEsMikuIGVkZ2UoYiwzKS4gZWRnZShjLDIpLiBlZGdlKGMsNCkuIGVkZ2UoZSwxKS4gZWRnZShlLDQpLiBlZGdlKGUsNSku
-%formhe-selfeval-lines:3
-%formhe-selfeval-fix: :- set(X, Z), set(X, W), Z != W, group(Z), group(W).
+%formhe-problem:E
+%formhe-timestamp:1667941045
+%formhe-selfeval-lines:0 1 2
+%formhe-selfeval-fix: :- set(X, Z), set(X, W), Z != W, group(Z), group(W).  :- edge(X, Y), set(X, Z), set(Y, Z), vertex(X), vertex(Y), group(Z), X != Y. group(a).
 
-group(a).
+ :- set(b, Z), edge(X, W), Z != W, group(Z), group(W).
+ :- edge(X, Y), set(X, b), set(Y, Z), vertex(X), vertex(Y), group(Z), X == Y.
 group(b).
- :- edge(X, Y), set(X, Z), set(Y, Z), vertex(X), vertex(Y), group(Z), X != Y.
- :- set(X, Z), X == W, Z != W, group(Z), group(W).
+group(b).
 1 { set(X, Z) : vertex(X), group(Z) } 1 :- vertex(X).

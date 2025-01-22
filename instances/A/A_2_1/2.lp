@@ -1,10 +1,8 @@
-%formhe-groundtruth:../../../mooshak/instances/1920_2.lp
-%formhe-domain-predicates:assign/2
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCBiKS4KZShhLCBjKS4KZShhLCBkKS4KZShjLCBkKS4K
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCBiKS4KZShhLCBjKS4KZShiLCBjKS4KZShjLCBkKS4KZShjLCBlKS4KZShjLCBmKS4KZShjLCBnKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLDIpLiBlKDIsMykuIGUoMyw0KS4gZSg0LDUpLiBlKDUsMSkuCmUoMSw2KS4gZSgyLDcpLiBlKDMsOCkuIGUoNCw5KSwgZSg1LDEwKS4KZSg2LDgpLiBlKDYsOSkuCmUoNyw5KS4gZSg3LDEwKS4KZSg4LDEwKS4=
-%formhe-selfeval-lines:
-%formhe-selfeval-fix:1 { assign(Y, (1..k)) : #true } 1 :- e(X, Y).
+%formhe-problem:A
+%formhe-timestamp:1667929699
+%formhe-selfeval-lines:1 2
+%formhe-selfeval-fix: :- e(X, Y), assign(X, C), assign(Y, C). 1 { assign(Y, (1..k)) } 1 :- e(X, Y).
 
-1 { assign(X, (1..k)) : #true } 1 :- e(X, Y).
- :- e(X, Y), assign(X, C), assign(Y, C).
+1 { assign(X, (1..k)) } 1 :- e(X, Y).
+Y != C :- assign(X, Y), assign(X, Y), assign(X, C).
+1 { e(Y, 1; k) } 1 :- e(X, Y).

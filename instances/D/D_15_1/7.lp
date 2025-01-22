@@ -1,15 +1,10 @@
-%formhe-groundtruth:../../../mooshak/instances/1819_1.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4KZSgxLCAzKS4KZSg0LCAzKS4KZSg0LCA1KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCAyKS4KZSgxLCAzKS4KZSg0LCAzKS4KZSg0LCA1KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4KZSgyLCAzKS4KZSgzLCA0KS4KZSg0LCA1KS4KZSg1LCA2KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAxLgoKZSgxLCAzKS4KZSgyLCAzKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZSgxLCAyKS4=
-%formhe-selfeval-lines:4
-%formhe-selfeval-fix:
+%formhe-problem:D
+%formhe-timestamp:1699276601
+%formhe-selfeval-lines:1 3 4
+%formhe-selfeval-fix:nodes(Y) :- e(_, Y). nodes(X) :- e(X, _).
 
-nodes(X) :- e(X, _).
-nodes(Y) :- e(_, Y).
 1 { sel(N) : nodes(N) } k.
+nodes(Y) :- e(1, Y).
  :- e(X, Y), not sel(X), not sel(Y).
- :- nodes(I1).
+e(X, (0..1)) :- e(X, _), -e(_, _).
+ :- e((1..0), (1..0)).

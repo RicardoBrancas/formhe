@@ -1,8 +1,5 @@
-%formhe-groundtruth:../01/B_0_1.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZShhLCAxKS4KZShhLCAyKS4KZShiLCAzKS4KZShiLCA0KS4KZShjLCAxKS4KZShjLCAzKS4K
-%formhe-instance-base64:I2NvbnN0IGsgPSAzLgoKZShhLCAxKS4KZShhLCAyKS4KZShhLCAzKS4KZShiLCA0KS4KZShiLCA1KS4KZShiLCA2KS4KZShjLCA3KS4KZShjLCA4KS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZShhLCAxKS4KZShhLCAyKS4KZShhLCAzKS4KZShiLCA0KS4KZShiLCA1KS4KZShiLCA2KS4KZShjLCA3KS4KZShjLCA4KS4=
+%formhe-problem:B
+%formhe-timestamp:1698332302
 
 % Default
 %% #const k = 2.
@@ -16,8 +13,7 @@
 { sel(X) : e(X,_) } = k.
 
 % Test
-:- sel(A), sel(B), A != B,
-   e(A,X), e(B,X).
+:- sel(A), sel(B), A != B, e(A,X), e(B,X).
 
 % Display
 #show sel/1.

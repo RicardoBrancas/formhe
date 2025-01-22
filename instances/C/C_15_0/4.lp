@@ -1,11 +1,9 @@
-%formhe-groundtruth:../../../mooshak/instances/1819_2.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCBhKS4KZSgyLCBhKS4KZSgzLCBhKS4KZSgyLCBiKS4KZSg0LCBiKS4KZSg0LCBjKS4KZSg1LCBjKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCBhKS4KZSgyLCBhKS4KZSgzLCBhKS4KZSgyLCBiKS4KZSg0LCBiKS4KZSgzLCBjKS4KZSg0LCBjKS4KZSg0LCBkKS4KZSg1LCBkKS4=
-%formhe-selfeval-lines:
-%formhe-selfeval-fix:set(SET) :- e(_, SET).
+%formhe-problem:C
+%formhe-timestamp:1699275399
+%formhe-selfeval-lines:2 3
+%formhe-selfeval-fix:allElements(E) :- e(E, SET), set(SET). k { sel(S) : set(S) } k. set(SET) :- e(_, SET).
 
-k { sel(S) : set(S) } k.
-elementsInSolution(E) :- e(E, SET), sel(SET).
-allElements(E) :- e(E, SET), set(SET).
  :- allElements(E), not elementsInSolution(E).
+elementsInSolution(E) :- e(E, SET), sel(SET).
+elementsInSolution(E) :- e(E, SET), set(SET).
+set(1) :- e(_, SET).

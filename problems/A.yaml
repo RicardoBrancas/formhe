@@ -1,0 +1,40 @@
+name: A
+title: k-coloring
+description: >-
+  Write an ASP program for the k-coloring problem. Consider the colors 1 to k
+  and an undirected graph given by the edge predicate `e(s,t)`. Find a color for
+  each vertex so that no two neighbours are colored by the same color. You may
+  assume there are no isolated nodes.
+
+  Your program should contain the predicate `assign(node, color)` that is
+  true iff node is colored by color. Do not include the definition for k or the
+  example graph in your solution file.
+
+inputs:
+  - |
+    #const k = 3.
+    e(a, b). e(a, c). e(a, d). e(c, d).
+  - |
+    #const k = 3.
+    e(a, b). e(a, c). e(b, c). e(c, d). e(c, e). e(c, f). e(c, g).
+  - |
+    #const k = 3.
+    e(1,2). e(2,3). e(3,4). e(4,5). e(5,1). e(1,6). e(2,7). e(3,8). e(4,9), e(5,10).
+    e(6,8). e(6,9). e(7,9). e(7,10). e(8,10).
+  - |
+    #const k = 2.
+    e(a, b). e(c, d).
+
+input_predicates:
+  - e/2
+
+input_constants:
+  - k
+
+output_predicates:
+  - assign/2
+
+correct_implementations:
+  - correct_instances/mooshak/**/A_*.lp
+
+canon_implementation: correct_instances/mooshak/01/A_0_1.lp

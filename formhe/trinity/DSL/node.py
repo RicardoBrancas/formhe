@@ -4,6 +4,7 @@ from itertools import chain
 from typing import cast, List, Any, Optional
 
 from formhe.trinity.DSL.spec import Type, Production, EnumProduction
+from trinity.DSL.type import SpecialType
 
 
 class Node(ABC):
@@ -258,7 +259,7 @@ class ApplyNode(Node):
                 decl_ty = (decl_ty,)
             found_match = False
             for decl_ty_elem in decl_ty:
-                if decl_ty_elem.name == 'Any' or decl_ty_elem == actual_ty:
+                if decl_ty_elem.name == 'Any' or decl_ty_elem == actual_ty or actual_ty == SpecialType:
                     found_match = True
                     break
             if not found_match:
@@ -296,9 +297,9 @@ class ApplyNode(Node):
         """
         if isinstance(other, ApplyNode):
             return self.name == other.name and \
-                   len(self.args) == len(other.args) and \
-                   all(x.deep_eq(y)
-                       for x, y in zip(self.args, other.args))
+                len(self.args) == len(other.args) and \
+                all(x.deep_eq(y)
+                    for x, y in zip(self.args, other.args))
         return False
 
     def deep_hash(self) -> int:
@@ -312,3 +313,25 @@ class ApplyNode(Node):
 
     def __str__(self) -> str:
         return f'{self.name}({", ".join(map(str, self._args))})'
+
+
+class HoleNode(LeafNode):
+
+    def __init__(self):
+        pass
+
+    def is_enum(self) -> bool:
+        return True
+
+    def is_param(self) -> bool:
+        return False
+
+    @property
+    def children(self) -> List['Node']:
+        return []
+
+    @property
+    def type(self) -> Type:
+        return SpecialType
+
+

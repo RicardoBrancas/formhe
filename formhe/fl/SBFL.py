@@ -5,7 +5,7 @@ import clingo.ast
 import runhelper
 from ordered_set import OrderedSet
 
-from fl.FaultLocalizer import FaultLocalizer
+from fl.fault_localizer import FaultLocalizer
 from formhe.asp.highlithing_visitor import AspHighlithingVisitor, MaxScorer, RuleScoreCalculator
 from formhe.utils import config
 

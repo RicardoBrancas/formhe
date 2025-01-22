@@ -1,9 +1,7 @@
-%formhe-groundtruth:../../../mooshak/instances/2021_2.lp
-%formhe-domain-predicates:set/2
-%formhe-instance-base64:JSB2ZXJ0ZXhlcwp2ZXJ0ZXgoYSkuIHZlcnRleChiKS4gdmVydGV4KGMpLiB2ZXJ0ZXgoZCkuIHZlcnRleChlKS4KJSBlZGdlcwplZGdlKGEsYikuIGVkZ2UoYixjKS4gZWRnZShjLGQpLiBlZGdlKGQsYSkuIGVkZ2UoZCxlKS4K
-%formhe-instance-base64:dmVydGV4KGEpLiB2ZXJ0ZXgoYikuIHZlcnRleChjKS4gdmVydGV4KGUpLiB2ZXJ0ZXgoMSkuIHZlcnRleCgyKS4gdmVydGV4KDMpLiB2ZXJ0ZXgoNCkuIHZlcnRleCg1KS4KZWRnZShhLDEpLiBlZGdlKGEsMikuIGVkZ2UoYiwzKS4gZWRnZShjLDIpLiBlZGdlKGMsNCkuIGVkZ2UoZSwxKS4gZWRnZShlLDQpLiBlZGdlKGUsNSku
+%formhe-problem:E
+%formhe-timestamp:1
 %formhe-selfeval-lines:0
-%formhe-selfeval-fix:1 { set(X, a); set(X, b) } 1 :- vertex(X).
+%formhe-selfeval-fix: :- edge(X, Y), set(X, S), set(Y, S).
 
- :- vertex(X).
- :- edge(X, Y), set(X, S), set(Y, S).
+ :- -vertex(0), set(X, S), set(I1, S), set((0..a), 0; b).
+1 { set(X, a); set(X, b) } 1 :- vertex(X).

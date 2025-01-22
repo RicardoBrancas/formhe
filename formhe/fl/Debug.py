@@ -4,7 +4,7 @@ from typing import List
 import runhelper
 from ordered_set import OrderedSet
 
-from fl.FaultLocalizer import FaultLocalizer
+from fl.fault_localizer import FaultLocalizer
 
 logger = logging.getLogger('formhe.asp.fault_localization')
 

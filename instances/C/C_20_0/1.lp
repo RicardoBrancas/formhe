@@ -1,11 +1,10 @@
-%formhe-groundtruth:../../../mooshak/instances/1819_2.lp
-%formhe-domain-predicates:sel/1
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCBhKS4KZSgyLCBhKS4KZSgzLCBhKS4KZSgyLCBiKS4KZSg0LCBiKS4KZSg0LCBjKS4KZSg1LCBjKS4=
-%formhe-instance-base64:I2NvbnN0IGsgPSAyLgoKZSgxLCBhKS4KZSgyLCBhKS4KZSgzLCBhKS4KZSgyLCBiKS4KZSg0LCBiKS4KZSgzLCBjKS4KZSg0LCBjKS4KZSg0LCBkKS4KZSg1LCBkKS4=
-%formhe-selfeval-lines:
-%formhe-selfeval-fix:1 { sel(S) : e(X, S) }  :- element(X).
+%formhe-problem:C
+%formhe-timestamp:1698332121
+%formhe-selfeval-lines:1 2
+%formhe-selfeval-fix:set(S) :- e(X, S).  :- sel(S), not set(S).
 
 element(X) :- e(X, S).
-set(S) :- e(X, S).
- :- sel(S), not set(S).
+ :- e(X, S).
+ :- sel(S), -set(S).
+1 { sel(S) : e(X, S) }  :- element(X).
 k { sel(S) : set(S) } k.

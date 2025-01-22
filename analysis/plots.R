@@ -1,10 +1,10 @@
-library('devEMF')
-
 options(tikzDefaultEngine = 'pdftex',
         tikzLatexPackages = c(
           getOption("tikzLatexPackages"),
           "\\RequirePackage[T1]{fontenc}\n",
-          "\\RequirePackage{lmodern}\n"
+          "\\renewcommand{\\sfdefault}{phv}\n",
+          "\\renewcommand{\\rmdefault}{ptm}\n",
+          "\\renewcommand{\\ttdefault}{pcr}\n"
         ),
         tikzMetricsDictionary = './metrics_cache_thesis',
         standAlone = T)
@@ -12,7 +12,7 @@ textwidth <- 4.8041
 linewidth <- 4.8041
 
 
-my_theme <- function(base_size = 9, base_family = "sans") {
+my_theme <- function(base_size = 8.5, base_family = "sans") {
   ltgray <- "#cccccc"
   dkgray <- "#111111"
   dkgray2 <- "#000000"
@@ -35,7 +35,7 @@ my_theme <- function(base_size = 9, base_family = "sans") {
     panel.grid.major = element_line(colour = ltgray),
     panel.grid.minor = element_blank(),
     legend.background = element_rect(colour = NA),
-    legend.text = element_text(size = rel(1), colour = dkgray),
+    legend.text = element_text(size = rel(0.9), colour = dkgray),
     # legend.title = element_text(size = rel(1), colour = dkgray2, face = "plain"),
     legend.key = element_rect_round(color = NA, radius = unit(0.4, "snpc")),
     # legend.position = "right",
@@ -60,7 +60,7 @@ plot_emf <- function(filename, width, height, plot) {
   dev.off()
 }
 
-ibm_colors <- c("#dc267f", "#fe6100", "#785ef0", "#648fff", "#ffb000")
+ibm_colors <- c("#dc267f", "#fe6100", "#785ef0", "#22aa7e", "#ffb000")
 
 ibm_palette <- function(n) {
   if (missing(n)) {
@@ -134,11 +134,12 @@ times_boxplot <- function(..., all = F, angle = 0) {
     my_theme()
 }
 
-vbs <- function(..., timelimit = 600) {
+vbs <- function(..., timelimit = 600, .facet_vars = NULL) {
   runs <- list(...)
   data <- bind_rows(runs, .id = 'run')
   t <- data %>%
     group_by(instance) %>%
+    group_by_at({ { .facet_vars } }, .add = TRUE) %>%
     summarise(real = min(ifelse(feedback_type == 'Synthesis Success', real, timelimit)),
               cpu = min(ifelse(feedback_type == 'Synthesis Success', cpu, timelimit)),
               feedback_type = case_when(any(feedback_type == "Synthesis Success") ~ "Synthesis Success",
@@ -151,11 +152,11 @@ pick <- function(condition) {
   function(d) d %>% filter_(condition)
 }
 
-times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, every_other = 50, get_data = F, get_data_cutoff = NA, facet_vars = NULL) {
+times_inverse_cactus <- function(..., all = F, filter_expr = NULL, use_vbs = F, every_other = 50, get_data = F, get_data_cutoff = NA, facet_vars = NULL, absolute = F) {
   runs <- list2(...)
   data <- bind_rows(runs, .id = 'run')
   if (use_vbs) {
-    data <- data %>% bind_rows(vbs(...))
+    data <- data %>% bind_rows(vbs(..., .facet_vars = facet_vars))
   }
   if (!all) {
     data <- data %>%
@@ -163,8 +164,8 @@ times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, eve
                feedback_type != 'Parsing Error' &
                feedback_type != 'Grounding Error')
   }
-  if (!is.null(filter_f)) {
-    data <- data %>% filter(filter_f(instance))
+  if (!is.null(filter_expr)) {
+    data <- data %>% filter(!!filter_expr)
   }
   tmp <- data %>%
     mutate(feedback_type = case_when(feedback_type == 'Other' ~ 'Failed',
@@ -175,7 +176,7 @@ times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, eve
     group_by(run) %>%
     group_by_at({ { facet_vars } }, .add = TRUE) %>%
     # mutate(val = cumsum(feedback_type == 'Synthesis Success')) %>%
-    mutate(val = cumsum(feedback_type == 'Synthesis Success') / n_distinct(instance)) %>%
+    mutate(val = cumsum(feedback_type == 'Synthesis Success') / ifelse(absolute, 1, n_distinct(instance))) %>%
     mutate(id = row_number()) %>%
     ungroup()
   if (get_data) {
@@ -193,17 +194,18 @@ times_inverse_cactus <- function(..., all = F, filter_f = NULL, use_vbs = F, eve
   }
   tmp <- tmp %>% filter(feedback_type == 'Synthesis Success')
   tmp <- tmp %>% ggplot(aes(y = val, x = real, color = factor(run, levels = c(names(runs), "VBS")), shape = factor(run, levels = c(names(runs), "VBS")))) +
-    geom_point(data = function(d) { d %>% filter(id %% every_other == 0 & run == "Synthetic Instances" | run == "Real Instances") }) +
+    geom_point(data = function(d) { d %>% group_by(run) %>% group_by_at({ { facet_vars } }, .add = TRUE) %>% mutate(group_id = 1:n()) %>% filter((group_id %% (n() %/% every_other)) == 1) %>% ungroup() }) +
     geom_line() +
     scale_color_ibm() +
     scale_x_continuous(trans = "log10", breaks = c(5, 10, 30, 60, 180, 600), guide = guide_axis_logticks(long = 2, mid = 1, short = 0.5)) +
     # scale_y_continuous(breaks = extended_breaks(n = 6)) +
-    scale_y_continuous(breaks = extended_breaks(n = 6), labels = label_percent(accuracy = 1, suffix = '\\%')) +
+  { if (absolute) scale_y_continuous(breaks = extended_breaks(n = 6)) } +
+  { if (!absolute) scale_y_continuous(breaks = extended_breaks(n = 6), labels = label_percent(accuracy = 1, suffix = '\\%')) } +
     labs(y = '\\% Instances Repaired', x = 'Time (s)') +
     # coord_polar("y", start = 0) +
     my_theme()
   if (!is.null(facet_vars)) {
-    tmp <- tmp + facet_wrap({ { facet_vars } }, scales = "free_y", labeller = label_both)
+    tmp <- tmp + facet_wrap({ { facet_vars } }, scales = "fixed", labeller = label_both)
   }
   tmp
 }
@@ -247,20 +249,19 @@ fault_identified_plot_new <- function(..., all = F, full = F, drop_zero_incorrec
     data <- data %>% filter(selfeval.lines != 'set()')
   }
   if (get_data) {
-    total_instances <- (data %>%
-      mutate(run = factor(run, levels = names(runs))) %>%
-      group_by(run) %>%
-      summarise(n = n()) %>%
-      ungroup() %>%
-      summarise(n = max(n)))[[1]]
-    print(total_instances)
     return(data %>%
              mutate(run = factor(run, levels = names(runs))) %>%
-             group_by(run, fault.identified) %>%
+             group_by(run) %>%
+             group_by_at({ { facet_vars } }, .add = TRUE) %>%
+             mutate(total_instances = n()) %>%
+             group_by(fault.identified, total_instances, .add = TRUE) %>%
              count() %>%
-             spread(fault.identified, n) %>%
+             pivot_wider(names_from = c(fault.identified, synthetic), values_from = n, names_expand = T, values_fill = 0, names_sep = "-") %>%
              ungroup() %>%
-             mutate_at(vars(-run), function(x) { x / total_instances }) %>%
+             mutate(across(c(-run, -total_instances), ~. / total_instances)) %>%
+             select(-total_instances) %>%
+             group_by(run) %>%
+             summarise_all(sum) %>%
              mutate_at(vars(-run), function(x) { ifelse(!is.na(x), ifelse(x == max(x, na.rm = T), paste0('\\textbf{', scales::percent(x, suffix = "\\%", accuracy = 0.1), '}'), scales::percent(x, suffix = "\\%", accuracy = 0.1)), 'NA') }))
   }
   if (full) {
@@ -345,21 +346,11 @@ feedback_fault_grid_new <- function(data, all = F, full = F, reduced_labels = T)
                                                                                    'Superset (first MCS)', 'Subset (first MCS)', 'Not Disjoint (first MCS)', 'Superset (not first MCS)', 'Subset (not first MCS)',
                                                                                    'Not Disjoint (not first MCS)', 'No (no lines identified)', 'Wrong (no incorrect lines)', 'Wrong (wrong lines identified)')))
   }
-  if (full) {
-    tmp <- data %>%
-      ggplot(aes(x = fault.identified.full, y = feedback_type))
-  } else {
-    tmp <- data %>%
-      ggplot(aes(x = fault.identified, y = feedback_type))
-  }
-  tmp +
-    geom_bin2d() +
-    stat_bin2d(geom = "text", aes(label = scales::percent(..count.. / total_instances))) +
-    scale_x_discrete(guide = guide_axis(angle = 30)) +
-    scale_fill_gradient(low = "white", high = ibm_colors[[1]], limits = c(0, NA)) +
-    my_theme() +
-    labs(y = 'Outcome', x = 'Fault identitifed?') +
-    theme(legend.position = 'none')
+  data %>%
+    group_by(fault.identified) %>%
+    summarise('Number of instances' = n(), '% Repaired' =  sum(solved) / n()) %>%
+    pivot_longer(!fault.identified) %>%
+    pivot_wider(names_from = fault.identified, values_from = value)
 }
 
 detailed_times_boxplot <- function(..., percentage = F) {

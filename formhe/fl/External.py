@@ -2,7 +2,7 @@ from typing import List
 
 from ordered_set import OrderedSet
 
-from fl.FaultLocalizer import FaultLocalizer
+from fl.fault_localizer import FaultLocalizer
 
 
 class ExternalFL(FaultLocalizer):

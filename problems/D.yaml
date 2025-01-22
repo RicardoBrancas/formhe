@@ -1,0 +1,45 @@
+name: D
+title: Vertex Cover
+description: >-
+  Given an undirected graph G = (V, E), a vertex cover is a set of vertices V′ ⊆ V
+  such that each edge e ∈ E is incident with at least one vertex in V′, i.e. if
+  e = (v1, v2), it must be that v1 ∈ V′ or v2 ∈ V′.
+  Write an Answer Set program P that finds a vertex cover of limited size. The
+  input is a concrete graph and a natural number k.
+
+  The edges are specified by
+  a predicate `e(X,Y)`. The program should contain a predicate `sel(X)`, which
+  is true if and only if the vertex X is part of the vertex cover. Assume that `k` is
+  a natural number defining the upper bound on the size of the vertex cover. Do
+  not include the definition for k or the example graph in your solution file.
+
+inputs:
+  - |
+    #const k = 3.
+    e(1, 2). e(1, 3). e(4, 3). e(4, 5).
+  - |
+    #const k = 2.
+    e(1, 2). e(1, 3). e(4, 3). e(4, 5).
+  - |
+    #const k = 3.
+    e(1, 2). e(2, 3). e(3, 4). e(4, 5). e(5, 6).
+  - |
+    #const k = 1.
+    e(1, 3). e(2, 3).
+  - |
+    #const k = 3.
+    e(1, 2).
+
+input_predicates:
+  - e/2
+
+input_constants:
+  - k
+
+output_predicates:
+  - sel/1
+
+correct_implementations:
+  - correct_instances/mooshak/**/D_*.lp
+
+canon_implementation: correct_instances/mooshak/01/D_0_1.lp

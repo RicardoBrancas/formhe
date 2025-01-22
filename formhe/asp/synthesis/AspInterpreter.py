@@ -3,23 +3,17 @@ import re
 from typing import Any
 
 import runhelper
-
 from formhe.asp.instance import Instance
 from formhe.trinity.Visitor import PostOrderInterpreter
-from formhe.utils import config, perf
 
 logger = logging.getLogger('formhe.asp.interpreter')
 
 
 class AspInterpreter(PostOrderInterpreter):
 
-    def __init__(self, instance: Instance, predicates: list = None):
+    def __init__(self, instance: Instance):
         self.instance = instance
         self.part_counter = 0
-        if predicates is None:
-            self.predicates = self.instance.constantCollector.predicates.keys()
-        else:
-            self.predicates = predicates
 
     def __getattribute__(self, name: str) -> Any:
         try:
@@ -37,16 +31,16 @@ class AspInterpreter(PostOrderInterpreter):
 
     def test(self, prog):
         for control_i in range(len(self.instance.asts)):
-            control = self.instance.get_control(prog, project=True, clingo_args=['--opt-mode=optN'] if self.instance.config.optimization_problem else [], i=control_i)
+            control = self.instance.get_control(prog, max_sols=len(self.instance.canon.models[control_i]) + 1, project=True, clingo_args=['--opt-mode=optN'] if self.instance.problem.optimization else [], i=control_i)
             runhelper.timer_start('interpreter.test.time')
             at_least_one = False
             with control.solve(yield_=True) as handle:
                 for m in handle:
-                    if self.instance.config.optimization_problem and not m.optimality_proven:
+                    if self.instance.problem.optimization and not m.optimality_proven:
                         continue
 
                     model = tuple(sorted((m.symbols(shown=True))))
-                    if model not in self.instance.ground_truth.models[control_i]:
+                    if model not in self.instance.canon.models[control_i]:
                         runhelper.tag_increment('interpreter.test.early.exit')
                         runhelper.timer_stop('interpreter.test.time')
                         return False
@@ -74,7 +68,7 @@ class AspInterpreter(PostOrderInterpreter):
         return '; '.join([arg for arg in args if arg.strip() != ""])
 
     def eval_stmt_and(self, node, args):
-        return ' '.join([arg for arg in args if arg.strip() != ""])
+        return '\n'.join([arg for arg in args if arg.strip() != ""])
 
     def eval_eq(self, node, args):
         return args[0] + ' == ' + args[1]
@@ -121,7 +115,10 @@ class AspInterpreter(PostOrderInterpreter):
         return ':~ ' + args[3] + '. [' + args[0] + '@' + args[2] + ']'
 
     def eval_aggregate(self, node, args):
-        return args[0] + ' { ' + args[1] + ' : ' + args[2] + ' } ' + args[3]
+        if args[2] != '#true':
+            return args[0] + ' { ' + args[1] + ' : ' + args[2] + ' } ' + args[3]
+        else:
+            return args[0] + ' { ' + args[1] + ' } ' + args[3]
 
     def eval_aggregate_pool(self, node, args):
         return args[0] + ' { ' + args[1] + ' } ' + args[2]
@@ -146,3 +143,6 @@ class AspInterpreter(PostOrderInterpreter):
 
     def eval_BodyAggregateFunc(self, value):
         return value
+
+    def eval_hole(self, value):
+        return "?"

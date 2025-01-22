@@ -1,0 +1,37 @@
+name: E
+title: Bipartite Graphs
+descriptions: >-
+  Propose an ASP encoding to determine if a given graph is bipartite or not.
+  Remember that a graph G = (V, E) is bipartite if the set of vertices can be
+  split into two disjoint sets A and B such that V = A ∪ B and there is no edge
+  (u, v) ∈ E such that both vertexes u and v belong to the same set (either A or
+  B).
+
+  The problem is defined by two predicates `vertex(V)` and `edge(U,V)` defining,
+  respectively, the vertices and the edges of the graph.
+  Your program should contain a predicate `set(NODE, GROUP)` such that all nodes
+  must be assigned to either group `a` or group `b`.
+  If the graph is not bipartite then your program should return UNSAT. Do
+  not include the definition for the example graph in your solution file.
+
+inputs:
+  - |
+    vertex(a). vertex(b). vertex(c). vertex(d). vertex(e).
+    edge(a,b). edge(b,c). edge(c,d). edge(d,a). edge(d,e).
+  - |
+    vertex(a). vertex(b). vertex(c). vertex(e). vertex(1). vertex(2). vertex(3). vertex(4). vertex(5).
+    edge(a,1). edge(a,2). edge(b,3). edge(c,2). edge(c,4). edge(e,1). edge(e,4). edge(e,5).
+
+input_predicates:
+  - vertex/1
+  - edge/2
+  - a/0
+  - b/0
+
+output_predicates:
+  - set/2
+
+correct_implementations:
+  - correct_instances/mooshak/**/E_*.lp
+
+canon_implementation: correct_instances/mooshak/01/E_0_1.lp
