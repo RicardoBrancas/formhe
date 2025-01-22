@@ -4,7 +4,7 @@
 
 - `formhe` contains the main source code for FormHe
 - `helper-scripts` contains helper scripts used for evaluation and machine learning tasks
-- `instances` contains the programs submitted by the students
+- `instances` contains incorrect programs used for testing and evaluation. `instances/mooshak` contains real instances submitted by student while the rest are synthetic.
 - `correct-instances` and `problems` contains correct solutions and info for each problem
 - `analysis` contains log files from FormHe executions and R code to analyze those executions
 - `analysis/data` contains the log files
