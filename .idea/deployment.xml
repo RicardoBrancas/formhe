@@ -11,6 +11,14 @@
           </mappings>
         </serverdata>
       </paths>
+      <paths name="zaek">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/formhe" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/runhelper" local="$PROJECT_DIR$/../runhelper" />
+          </mappings>
+        </serverdata>
+      </paths>
     </serverData>
   </component>
 </project>
